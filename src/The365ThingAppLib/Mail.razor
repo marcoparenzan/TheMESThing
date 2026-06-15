@@ -1,0 +1,356 @@
+@page "/office365/mail"
+@rendermode InteractiveServer
+@inject IEmailService EmailService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Mail</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">✉️ Mail</h2>
+        <button class="btn btn-primary" @onclick="OpenComposeModal">+ New Email</button>
+    </div>
+
+    @if (_error != null)
+    {
+        <div class="alert alert-danger" style="margin: 0.75rem 1.5rem 0;">
+            @_error
+            <button @onclick="() => _error = null"
+                    style="float: right; background: none; border: none; cursor: pointer; font-size: 1rem; line-height: 1;">✕</button>
+        </div>
+    }
+
+    <div style="display: grid; grid-template-columns: 220px 1fr; min-height: 500px; border-top: 1px solid #e5e7eb;">
+
+        @* ── Folder panel ─────────────────────────────────────────────────────── *@
+        <div style="border-right: 1px solid #e5e7eb; padding: 0.75rem 0; overflow-y: auto;">
+            @if (_loadingFolders)
+            {
+                <p class="loading" style="padding: 0.5rem 1rem;">Loading…</p>
+            }
+            else
+            {
+                @foreach (var folder in _folders)
+                {
+                    <div style="@FolderRowStyle(folder)" @onclick="@(() => SelectFolderAsync(folder))">
+                        <span>@FolderIcon(folder.DisplayName) @folder.DisplayName</span>
+                        @if (folder.UnreadItemCount > 0)
+                        {
+                            <span class="badge badge-info">@folder.UnreadItemCount</span>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        @* ── Email list + detail panel ────────────────────────────────────────── *@
+        <div style="display: flex; flex-direction: column; overflow: hidden;">
+            @if (_loadingEmails)
+            {
+                <div style="padding: 1.25rem 1.5rem;">
+                    <p class="loading">Loading emails…</p>
+                </div>
+            }
+            else if (_selectedFolder is null)
+            {
+                <div style="padding: 1.25rem 1.5rem;">
+                    <p class="text-muted">Select a folder to view emails.</p>
+                </div>
+            }
+            else if (_emails.Count == 0)
+            {
+                <div style="padding: 1.25rem 1.5rem;">
+                    <p class="text-muted">No emails in this folder.</p>
+                </div>
+            }
+            else
+            {
+                @* Email list *@
+                <div style="flex: 0 0 auto; max-height: @(_selectedEmail is null ? "none" : "300px"); overflow-y: auto;
+                            border-bottom: @(_selectedEmail is null ? "none" : "1px solid #e5e7eb");">
+                    @foreach (var email in _emails)
+                    {
+                        var isSelected = _selectedEmail?.Id == email.Id;
+                        var isRead     = email.IsRead || _readIds.Contains(email.Id);
+                        <div style="padding: 0.65rem 1.25rem; cursor: pointer; border-bottom: 1px solid #f3f4f6;
+                                    background: @(isSelected ? "#eff6ff" : "transparent");
+                                    border-left: 3px solid @(isSelected ? "#3b82f6" : "transparent");"
+                             @onclick="@(() => SelectEmailAsync(email))">
+                            <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem;">
+                                <span style="font-weight: @(isRead ? "400" : "700"); color: #111827;
+                                             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%;">
+                                    @(email.FromName ?? email.FromEmail ?? "Unknown")
+                                </span>
+                                <span style="font-size: 0.75rem; color: #9ca3af; white-space: nowrap; flex-shrink: 0;">
+                                    @FormatDate(email.ReceivedDateTime)
+                                </span>
+                            </div>
+                            <div style="font-size: 0.875rem; color: #374151; font-weight: @(isRead ? "400" : "600");
+                                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                @(email.Subject ?? "(no subject)")
+                                @if (email.HasAttachments)
+                                {
+                                    <span style="margin-left: 0.25rem; font-size: 0.75rem;">📎</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Email detail *@
+                @if (_selectedEmail is not null)
+                {
+                    <div style="flex: 1 1 auto; overflow-y: auto; padding: 1.25rem 1.5rem;">
+                        <h3 style="margin: 0 0 0.75rem; font-size: 1.1rem;">
+                            @(_selectedEmail.Subject ?? "(no subject)")
+                        </h3>
+                        <div style="font-size: 0.82rem; color: #6b7280; margin-bottom: 0.85rem;
+                                    display: flex; flex-direction: column; gap: 0.2rem;">
+                            <div>
+                                <strong>From:</strong>
+                                @if (_selectedEmail.FromName is not null)
+                                {
+                                    <span> @_selectedEmail.FromName</span>
+                                }
+                                @if (_selectedEmail.FromEmail is not null)
+                                {
+                                    <span style="color: #9ca3af;"> &lt;@_selectedEmail.FromEmail&gt;</span>
+                                }
+                            </div>
+                            @if (_selectedEmail.ToEmails.Count > 0)
+                            {
+                                <div><strong>To:</strong> @string.Join(", ", _selectedEmail.ToEmails)</div>
+                            }
+                            @if (_selectedEmail.CcEmails.Count > 0)
+                            {
+                                <div><strong>CC:</strong> @string.Join(", ", _selectedEmail.CcEmails)</div>
+                            }
+                            <div><strong>Date:</strong> @_selectedEmail.ReceivedDateTime?.ToString("f")</div>
+                        </div>
+                        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 0.75rem 0;" />
+                        <div style="font-size: 0.9rem; line-height: 1.7;">
+                            @((MarkupString)(_selectedEmail.BodyContent ?? string.Empty))
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@* ── Compose Modal ─────────────────────────────────────────────────────────── *@
+@if (_showComposeModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog" style="min-width: 560px;">
+            <div class="modal-header">
+                <h3 class="modal-title">New Email</h3>
+                <button class="btn btn-icon" @onclick="CloseComposeModal" disabled="@_sending">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid cols-1">
+                    <div class="form-group">
+                        <label>To * <span style="font-size: 0.78rem; color: #9ca3af;">(comma-separated)</span></label>
+                        <input type="text" @bind="_composeTo" placeholder="user@domain.com" />
+                    </div>
+                    <div class="form-group">
+                        <label>CC <span style="font-size: 0.78rem; color: #9ca3af;">(optional, comma-separated)</span></label>
+                        <input type="text" @bind="_composeCc" placeholder="user@domain.com" />
+                    </div>
+                    <div class="form-group">
+                        <label>Subject *</label>
+                        <input type="text" @bind="_composeSubject" />
+                    </div>
+                    <div class="form-group">
+                        <label>Message *</label>
+                        <textarea @bind="_composeBody" style="min-height: 140px;"></textarea>
+                    </div>
+                    @if (_composeError != null)
+                    {
+                        <div class="alert alert-danger">@_composeError</div>
+                    }
+                    @if (_sending)
+                    {
+                        <p class="loading">Sending…</p>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseComposeModal" disabled="@_sending">Cancel</button>
+                <button class="btn btn-primary" @onclick="SendEmailAsync" disabled="@_sending">Send</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _userUpn = string.Empty;
+
+    private List<MailFolder>     _folders        = [];
+    private List<Email>          _emails         = [];
+    private MailFolder?          _selectedFolder;
+    private Email?               _selectedEmail;
+    private readonly HashSet<string> _readIds        = [];
+    private bool                     _loadingFolders = true;
+    private bool                     _loadingEmails;
+    private string?                  _error;
+
+    private bool    _showComposeModal;
+    private bool    _sending;
+    private string  _composeTo      = string.Empty;
+    private string  _composeCc      = string.Empty;
+    private string  _composeSubject = string.Empty;
+    private string  _composeBody    = string.Empty;
+    private string? _composeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userUpn = auth.User.FindFirst("preferred_username")?.Value
+            ?? auth.User.Identity?.Name
+            ?? throw new InvalidOperationException("User not authenticated.");
+        await LoadFoldersAsync();
+    }
+
+    // ── Folders ───────────────────────────────────────────────────────────────
+
+    private async Task LoadFoldersAsync()
+    {
+        _loadingFolders = true;
+        try
+        {
+            _folders = (await EmailService.ListMailFoldersAsync(_userUpn)).ToList();
+            var inbox = _folders.FirstOrDefault(f =>
+                f.DisplayName.Equals("Inbox", StringComparison.OrdinalIgnoreCase));
+            if (inbox is not null)
+                await SelectFolderAsync(inbox);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loadingFolders = false; }
+    }
+
+    private async Task SelectFolderAsync(MailFolder folder)
+    {
+        _selectedFolder = folder;
+        _selectedEmail  = null;
+        _loadingEmails  = true;
+        StateHasChanged();
+        try
+        {
+            _emails = (await EmailService.ListEmailsByFolderIdAsync(_userUpn, folder.Id)).ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loadingEmails = false; }
+    }
+
+    // ── Email selection ───────────────────────────────────────────────────────
+
+    private async Task SelectEmailAsync(Email email)
+    {
+        _selectedEmail = email;
+        if (!email.IsRead && _readIds.Add(email.Id))
+        {
+            try { await EmailService.MarkEmailAsReadAsync(_userUpn, email.Id); } catch { }
+            if (_selectedFolder is not null)
+            {
+                _folders = _folders
+                    .Select(f => f.Id == _selectedFolder.Id
+                        ? new MailFolder
+                          {
+                              Id              = f.Id,
+                              DisplayName     = f.DisplayName,
+                              TotalItemCount  = f.TotalItemCount,
+                              UnreadItemCount = Math.Max(0, f.UnreadItemCount - 1)
+                          }
+                        : f)
+                    .ToList();
+                _selectedFolder = _folders.First(f => f.Id == _selectedFolder.Id);
+            }
+        }
+    }
+
+    // ── Compose ───────────────────────────────────────────────────────────────
+
+    private void OpenComposeModal()
+    {
+        _composeTo = _composeCc = _composeSubject = _composeBody = string.Empty;
+        _composeError    = null;
+        _showComposeModal = true;
+    }
+
+    private void CloseComposeModal()
+    {
+        if (!_sending) _showComposeModal = false;
+    }
+
+    private async Task SendEmailAsync()
+    {
+        _composeError = null;
+
+        var toList = ParseAddresses(_composeTo);
+        if (toList.Count == 0)
+            { _composeError = "At least one recipient is required."; return; }
+        if (string.IsNullOrWhiteSpace(_composeSubject))
+            { _composeError = "Subject is required."; return; }
+        if (string.IsNullOrWhiteSpace(_composeBody))
+            { _composeError = "Message body is required."; return; }
+
+        _sending = true;
+        try
+        {
+            await EmailService.SendEmailAndSaveAsync(_userUpn, new NewEmail
+            {
+                Subject     = _composeSubject.Trim(),
+                BodyContent = _composeBody,
+                ToEmails    = toList,
+                CcEmails    = ParseAddresses(_composeCc),
+                IsHtml      = false
+            });
+            _showComposeModal = false;
+            // Refresh if Sent Items is open
+            if (_selectedFolder is not null &&
+                (_selectedFolder.DisplayName.Equals("Sent Items", StringComparison.OrdinalIgnoreCase) ||
+                 _selectedFolder.DisplayName.Equals("Sent",       StringComparison.OrdinalIgnoreCase)))
+                await SelectFolderAsync(_selectedFolder);
+        }
+        catch (Exception ex) { _composeError = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static IReadOnlyList<string> ParseAddresses(string raw) =>
+        raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+           .Where(a => a.Contains('@'))
+           .ToList();
+
+    private string FolderRowStyle(MailFolder folder)
+    {
+        var sel = _selectedFolder?.Id == folder.Id;
+        return $"display: flex; justify-content: space-between; align-items: center; " +
+               $"padding: 0.5rem 1rem; cursor: pointer; font-size: 0.875rem; " +
+               $"background: {(sel ? "#eff6ff" : "transparent")}; " +
+               $"border-left: 3px solid {(sel ? "#3b82f6" : "transparent")}; " +
+               $"font-weight: {(sel ? "600" : "400")};";
+    }
+
+    private static string FolderIcon(string name) => name.ToLowerInvariant() switch
+    {
+        "inbox"         => "📥",
+        "sent items"    => "📤",
+        "sent"          => "📤",
+        "drafts"        => "📝",
+        "deleted items" => "🗑️",
+        "junk email"    => "🚫",
+        "outbox"        => "📬",
+        "archive"       => "📦",
+        _               => "📂"
+    };
+
+    private static string FormatDate(DateTimeOffset? dt)
+    {
+        if (dt is null) return string.Empty;
+        var local = dt.Value.LocalDateTime;
+        return local.Date == DateTime.Today ? local.ToString("HH:mm") : local.ToString("MMM d");
+    }
+}

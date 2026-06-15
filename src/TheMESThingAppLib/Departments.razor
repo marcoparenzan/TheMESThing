@@ -1,0 +1,134 @@
+@page "/mes/departments"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Departments</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">🏭 Departments</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Department</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Cost Center</th><th>Active</th><th>Created</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var d in _items)
+                {
+                    <tr>
+                        <td><strong>@d.DepartmentCode</strong></td>
+                        <td>@d.DepartmentName</td>
+                        <td><span class="text-muted">@d.CostCenter</span></td>
+                        <td><span class="badge @(d.IsActive ? "badge-success" : "badge-danger")">@(d.IsActive ? "Active" : "Inactive")</span></td>
+                        <td><span class="text-muted">@d.CreatedAtUtc.ToString("yyyy-MM-dd")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(d)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(d)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Department" : "New Department")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Code *</label><input @bind="_form.DepartmentCode" /></div>
+                    <div class="form-group"><label>Name *</label><input @bind="_form.DepartmentName" /></div>
+                    <div class="form-group"><label>Cost Center</label><input @bind="_form.CostCenter" /></div>
+                    <div class="form-group"><label>Active</label><input type="checkbox" @bind="_form.IsActive" style="width:auto" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Department</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.DepartmentName</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<Department>? _paged;
+    List<Department> _items = [];
+    Department? _deleteTarget;
+    DeptForm _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetDepartmentsAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(Department d)
+    {
+        _form = new() { Id = d.DepartmentId, TenantId = d.TenantId, DepartmentCode = d.DepartmentCode, DepartmentName = d.DepartmentName, CostCenter = d.CostCenter, IsActive = d.IsActive };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(Department d) => _deleteTarget = d;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var d = new Department(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.DepartmentCode, _form.DepartmentName, null, null, _form.CostCenter, null, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow);
+            if (_editing) await Api.UpdateDepartmentAsync(_form.Id, d);
+            else await Api.CreateDepartmentAsync(d);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteDepartmentAsync(_deleteTarget!.DepartmentId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class DeptForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public string DepartmentCode { get; set; } = "";
+        public string DepartmentName { get; set; } = "";
+        public string? CostCenter { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

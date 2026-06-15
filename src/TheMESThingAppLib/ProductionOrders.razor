@@ -1,0 +1,159 @@
+@page "/mes/production-orders"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Production Orders</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">🏗 Production Orders</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Production Order</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Order #</th><th>Status</th><th>Seq</th><th>Planned Qty</th><th>Good</th><th>Scrap</th><th>Planned Start</th><th>Planned End</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in _items)
+                {
+                    <tr>
+                        <td><strong>@p.OrderNumber</strong></td>
+                        <td><span class="badge @StatusBadge(p.Status)">@p.Status</span></td>
+                        <td>@p.OperationSequence</td>
+                        <td>@p.PlannedQuantity.ToString("N0")</td>
+                        <td>@p.GoodQuantity.ToString("N0")</td>
+                        <td>@p.ScrapQuantity.ToString("N0")</td>
+                        <td><span class="text-muted">@p.PlannedStartAtUtc?.ToString("yyyy-MM-dd HH:mm")</span></td>
+                        <td><span class="text-muted">@p.PlannedEndAtUtc?.ToString("yyyy-MM-dd HH:mm")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(p)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(p)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Production Order" : "New Production Order")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Order Number *</label><input @bind="_form.OrderNumber" /></div>
+                    <div class="form-group"><label>Status</label>
+                        <select @bind="_form.Status">
+                            <option>Planned</option><option>Released</option><option>InProgress</option><option>Completed</option><option>Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Operation Sequence</label><input type="number" @bind="_form.OperationSequence" /></div>
+                    <div class="form-group"><label>Planned Qty *</label><input type="number" @bind="_form.PlannedQuantity" /></div>
+                    <div class="form-group"><label>Planned Start (UTC)</label><input type="datetime-local" @bind="_form.PlannedStartAtUtc" /></div>
+                    <div class="form-group"><label>Planned End (UTC)</label><input type="datetime-local" @bind="_form.PlannedEndAtUtc" /></div>
+                    <div class="form-group"><label>Planned Cycle Time (s)</label><input type="number" @bind="_form.PlannedCycleTimeSeconds" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Production Order</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.OrderNumber</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<ProductionOrder>? _paged;
+    List<ProductionOrder> _items = [];
+    ProductionOrder? _deleteTarget;
+    PoForm _form = new();
+
+    static string StatusBadge(string s) => s switch
+    {
+        "Planned"    => "badge-info",
+        "Released"   => "badge-warning",
+        "InProgress" => "badge-success",
+        "Completed"  => "badge-success",
+        "Cancelled"  => "badge-danger",
+        _            => ""
+    };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetProductionOrdersAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(ProductionOrder p)
+    {
+        _form = new() { Id = p.ProductionOrderId, TenantId = p.TenantId, WorkOrderId = p.WorkOrderId, ProductId = p.ProductId, OrderNumber = p.OrderNumber, Status = p.Status, OperationSequence = p.OperationSequence, PlannedQuantity = p.PlannedQuantity, PlannedStartAtUtc = p.PlannedStartAtUtc, PlannedEndAtUtc = p.PlannedEndAtUtc, PlannedCycleTimeSeconds = p.PlannedCycleTimeSeconds };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(ProductionOrder p) => _deleteTarget = p;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var p = new ProductionOrder(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.WorkOrderId, _form.ProductId, null, null, _form.OperationSequence, _form.OrderNumber, _form.Status, _form.PlannedQuantity, 0, 0, 0, _form.PlannedStartAtUtc, _form.PlannedEndAtUtc, null, null, _form.PlannedCycleTimeSeconds, null, DateTime.UtcNow, DateTime.UtcNow);
+            if (_editing) await Api.UpdateProductionOrderAsync(_form.Id, p);
+            else await Api.CreateProductionOrderAsync(p);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteProductionOrderAsync(_deleteTarget!.ProductionOrderId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class PoForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public Guid WorkOrderId { get; set; }
+        public Guid ProductId { get; set; }
+        public string OrderNumber { get; set; } = "";
+        public string Status { get; set; } = "Planned";
+        public int OperationSequence { get; set; } = 10;
+        public double PlannedQuantity { get; set; }
+        public DateTime? PlannedStartAtUtc { get; set; }
+        public DateTime? PlannedEndAtUtc { get; set; }
+        public double? PlannedCycleTimeSeconds { get; set; }
+    }
+}

@@ -1,0 +1,139 @@
+@page "/mes/products"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Products</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">📦 Products</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Product</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Code</th><th>Name</th><th>UoM</th><th>Cycle Time (s)</th><th>Setup Time (s)</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in _items)
+                {
+                    <tr>
+                        <td><strong>@p.ProductCode</strong></td>
+                        <td>@p.ProductName</td>
+                        <td><span class="badge badge-info">@p.UnitOfMeasure</span></td>
+                        <td>@p.CycleTimeSeconds?.ToString("N1")</td>
+                        <td>@p.SetupTimeSeconds?.ToString("N1")</td>
+                        <td><span class="badge @(p.IsActive ? "badge-success" : "badge-danger")">@(p.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(p)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(p)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Product" : "New Product")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Code *</label><input @bind="_form.ProductCode" /></div>
+                    <div class="form-group"><label>Name *</label><input @bind="_form.ProductName" /></div>
+                    <div class="form-group"><label>Unit of Measure *</label><input @bind="_form.UnitOfMeasure" placeholder="e.g. PCS" /></div>
+                    <div class="form-group"><label>Cycle Time (s)</label><input type="number" @bind="_form.CycleTimeSeconds" /></div>
+                    <div class="form-group"><label>Setup Time (s)</label><input type="number" @bind="_form.SetupTimeSeconds" /></div>
+                    <div class="form-group"><label>Active</label><input type="checkbox" @bind="_form.IsActive" style="width:auto" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Product</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.ProductName</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<Product>? _paged;
+    List<Product> _items = [];
+    Product? _deleteTarget;
+    ProductForm _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetProductsAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(Product p)
+    {
+        _form = new() { Id = p.ProductId, TenantId = p.TenantId, ProductCode = p.ProductCode, ProductName = p.ProductName, UnitOfMeasure = p.UnitOfMeasure, CycleTimeSeconds = p.CycleTimeSeconds, SetupTimeSeconds = p.SetupTimeSeconds, IsActive = p.IsActive };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(Product p) => _deleteTarget = p;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var p = new Product(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.ProductCode, _form.ProductName, _form.UnitOfMeasure, _form.CycleTimeSeconds, _form.SetupTimeSeconds, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow);
+            if (_editing) await Api.UpdateProductAsync(_form.Id, p);
+            else await Api.CreateProductAsync(p);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteProductAsync(_deleteTarget!.ProductId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class ProductForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public string ProductCode { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public string UnitOfMeasure { get; set; } = "PCS";
+        public double? CycleTimeSeconds { get; set; }
+        public double? SetupTimeSeconds { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

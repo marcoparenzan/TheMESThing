@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="The365ThingAppLib/The365ThingAppLib.csproj" Id="e0f81ab8-df6a-4a91-99dc-cedb49716bd4" />
+  <Project Path="The365ThingClientApp/The365ThingClientApp.csproj" Id="d56b216c-c639-499b-9088-90bcad150284" />
+  <Project Path="The365ThingLib/The365ThingLib.csproj" />
+  <Project Path="TheItemsThingLib/TheItemsThingLib.csproj" />
+</Solution>

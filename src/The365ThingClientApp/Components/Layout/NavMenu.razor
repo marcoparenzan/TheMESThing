@@ -1,0 +1,23 @@
+<nav class="sidebar">
+    <div class="sidebar-header">
+        <span class="sidebar-brand">☁️ The 365 Thing</span>
+    </div>
+    <AuthorizeView>
+        <Authorized>
+            <The365ThingAppLib.NavMenu></The365ThingAppLib.NavMenu>
+            <div class="sidebar-user">
+                <div class="sidebar-section">@context.User.FindFirst("preferred_username")?.Value ?? context.User.Identity?.Name</div>
+                <NavLink class="nav-item" href="/account/logout" Match="NavLinkMatch.Prefix">
+                    <span class="nav-icon">🤝</span> Sign out
+                </NavLink>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <div class="sidebar-user">
+                <NavLink class="nav-item" href="/account/login" Match="NavLinkMatch.Prefix">
+                    <span class="nav-icon">🤝</span> Sign in
+                </NavLink>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+</nav>

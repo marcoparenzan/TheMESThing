@@ -1,0 +1,161 @@
+@page "/mes/machines"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Machines</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">🤖 Machines</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Machine</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Manufacturer</th><th>Status</th><th>IoT Device</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var m in _items)
+                {
+                    <tr>
+                        <td><strong>@m.MachineCode</strong></td>
+                        <td>@m.MachineName</td>
+                        <td><span class="badge badge-info">@m.MachineType</span></td>
+                        <td><span class="text-muted">@m.Manufacturer</span></td>
+                        <td><span class="badge @StatusBadge(m.CurrentStatus)">@m.CurrentStatus</span></td>
+                        <td><span class="text-muted">@m.IoTDeviceId</span></td>
+                        <td><span class="badge @(m.IsActive ? "badge-success" : "badge-danger")">@(m.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(m)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(m)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Machine" : "New Machine")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Code *</label><input @bind="_form.MachineCode" /></div>
+                    <div class="form-group"><label>Name *</label><input @bind="_form.MachineName" /></div>
+                    <div class="form-group"><label>Type *</label><input @bind="_form.MachineType" /></div>
+                    <div class="form-group"><label>Manufacturer</label><input @bind="_form.Manufacturer" /></div>
+                    <div class="form-group"><label>Model</label><input @bind="_form.Model" /></div>
+                    <div class="form-group"><label>Serial Number</label><input @bind="_form.SerialNumber" /></div>
+                    <div class="form-group"><label>Nominal Cycle Time (s)</label><input type="number" @bind="_form.NominalCycleTimeSeconds" /></div>
+                    <div class="form-group"><label>Nominal Capacity/h</label><input type="number" @bind="_form.NominalCapacityPerHour" /></div>
+                    <div class="form-group"><label>IoT Device ID</label><input @bind="_form.IoTDeviceId" /></div>
+                    <div class="form-group"><label>Installation Date</label><input type="date" @bind="_form.InstallationDate" /></div>
+                    <div class="form-group"><label>Active</label><input type="checkbox" @bind="_form.IsActive" style="width:auto" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Machine</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.MachineName</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<Machine>? _paged;
+    List<Machine> _items = [];
+    Machine? _deleteTarget;
+    MachineForm _form = new();
+
+    static string StatusBadge(string s) => s switch
+    {
+        "Running" => "badge-success",
+        "Idle"    => "badge-warning",
+        "Down"    => "badge-danger",
+        _         => "badge-info"
+    };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetMachinesAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(Machine m)
+    {
+        _form = new() { Id = m.MachineId, TenantId = m.TenantId, DepartmentId = m.DepartmentId, ProductionLineId = m.ProductionLineId, MachineCode = m.MachineCode, MachineName = m.MachineName, MachineType = m.MachineType, Manufacturer = m.Manufacturer, Model = m.Model, SerialNumber = m.SerialNumber, InstallationDate = m.InstallationDate?.ToDateTime(TimeOnly.MinValue), NominalCycleTimeSeconds = m.NominalCycleTimeSeconds, NominalCapacityPerHour = m.NominalCapacityPerHour, IoTDeviceId = m.IoTDeviceId, IsActive = m.IsActive };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(Machine m) => _deleteTarget = m;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var inst = _form.InstallationDate.HasValue ? DateOnly.FromDateTime(_form.InstallationDate.Value) : (DateOnly?)null;
+            var m = new Machine(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.DepartmentId, _form.ProductionLineId, _form.MachineCode, _form.MachineName, _form.MachineType, _form.Manufacturer, _form.Model, _form.SerialNumber, inst, _form.NominalCycleTimeSeconds, _form.NominalCapacityPerHour, _form.IoTDeviceId, null, "Idle", null, null, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow);
+            if (_editing) await Api.UpdateMachineAsync(_form.Id, m);
+            else await Api.CreateMachineAsync(m);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteMachineAsync(_deleteTarget!.MachineId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class MachineForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public Guid DepartmentId { get; set; }
+        public Guid? ProductionLineId { get; set; }
+        public string MachineCode { get; set; } = "";
+        public string MachineName { get; set; } = "";
+        public string MachineType { get; set; } = "";
+        public string? Manufacturer { get; set; }
+        public string? Model { get; set; }
+        public string? SerialNumber { get; set; }
+        public DateTime? InstallationDate { get; set; }
+        public double? NominalCycleTimeSeconds { get; set; }
+        public double? NominalCapacityPerHour { get; set; }
+        public string? IoTDeviceId { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

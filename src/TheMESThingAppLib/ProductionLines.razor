@@ -1,0 +1,140 @@
+@page "/mes/production-lines"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Production Lines</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">🔗 Production Lines</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Line</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Capacity</th><th>Unit</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var l in _items)
+                {
+                    <tr>
+                        <td><strong>@l.LineCode</strong></td>
+                        <td>@l.LineName</td>
+                        <td><span class="badge badge-info">@l.LineType</span></td>
+                        <td>@l.NominalCapacity?.ToString("N2")</td>
+                        <td><span class="text-muted">@l.CapacityUnit</span></td>
+                        <td><span class="badge @(l.IsActive ? "badge-success" : "badge-danger")">@(l.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(l)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(l)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Production Line" : "New Production Line")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Code *</label><input @bind="_form.LineCode" /></div>
+                    <div class="form-group"><label>Name *</label><input @bind="_form.LineName" /></div>
+                    <div class="form-group"><label>Type *</label><input @bind="_form.LineType" /></div>
+                    <div class="form-group"><label>Nominal Capacity</label><input type="number" @bind="_form.NominalCapacity" /></div>
+                    <div class="form-group"><label>Capacity Unit</label><input @bind="_form.CapacityUnit" /></div>
+                    <div class="form-group"><label>Active</label><input type="checkbox" @bind="_form.IsActive" style="width:auto" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Production Line</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.LineName</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<ProductionLine>? _paged;
+    List<ProductionLine> _items = [];
+    ProductionLine? _deleteTarget;
+    LineForm _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetProductionLinesAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(ProductionLine l)
+    {
+        _form = new() { Id = l.ProductionLineId, TenantId = l.TenantId, DepartmentId = l.DepartmentId, LineCode = l.LineCode, LineName = l.LineName, LineType = l.LineType, NominalCapacity = l.NominalCapacity, CapacityUnit = l.CapacityUnit, IsActive = l.IsActive };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(ProductionLine l) => _deleteTarget = l;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var l = new ProductionLine(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.DepartmentId, _form.LineCode, _form.LineName, _form.LineType, _form.NominalCapacity, _form.CapacityUnit, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow);
+            if (_editing) await Api.UpdateProductionLineAsync(_form.Id, l);
+            else await Api.CreateProductionLineAsync(l);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteProductionLineAsync(_deleteTarget!.ProductionLineId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class LineForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public Guid DepartmentId { get; set; }
+        public string LineCode { get; set; } = "";
+        public string LineName { get; set; } = "";
+        public string LineType { get; set; } = "";
+        public double? NominalCapacity { get; set; }
+        public string? CapacityUnit { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

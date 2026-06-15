@@ -1,0 +1,347 @@
+@page "/office365/users"
+@rendermode InteractiveServer
+@inject IContactsService ContactsService
+
+<PageTitle>Users</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">👥 Users</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New User</button>
+    </div>
+
+    @if (_error != null) 
+    { 
+        <div class="alert alert-danger">@_error</div> 
+    }
+
+    @if (_loading) 
+    { 
+        <p class="loading">Loading users…</p> 
+    }
+    else
+    {
+        <div style="padding: 1.25rem 1.5rem;">
+            <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
+                <input type="text" 
+                       placeholder="Search users..." 
+                       @bind="_searchTerm"
+                       @bind:event="oninput"
+                       style="flex: 1; max-width: 300px;"
+                       class="form-control" />
+                <button class="btn btn-secondary" @onclick="ReloadUsers">🔄 Refresh</button>
+            </div>
+
+            @if (_filteredUsers.Count == 0)
+            {
+                <p class="text-muted">No users found.</p>
+            }
+            else
+            {
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Display Name</th>
+                            <th>Email</th>
+                            <th>Department</th>
+                            <th>Job Title</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in _filteredUsers)
+                        {
+                            <tr>
+                                <td><strong>@user.DisplayName</strong></td>
+                                <td><span class="text-muted">@user.Mail</span></td>
+                                <td><span class="text-muted">@(user.Department ?? "-")</span></td>
+                                <td><span class="text-muted">@(user.JobTitle ?? "-")</span></td>
+                                <td>
+                                    <span class="badge @(user.AccountEnabled ? "badge-success" : "badge-danger")">
+                                        @(user.AccountEnabled ? "Active" : "Inactive")
+                                    </span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <button class="btn btn-icon" title="Edit" @onclick="@(() => OpenEdit(user))">✏️</button>
+                                    <button class="btn btn-icon" title="Delete" @onclick="@(() => OpenDelete(user))">🗑️</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">@(_editingUser?.Id == null ? "New User" : "Edit User")</h3>
+                <button class="btn btn-icon" @onclick="CloseModal">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (_editingUser != null)
+                {
+                    <div class="form-grid cols-1">
+                        <div class="form-group">
+                            <label>Display Name *</label>
+                            <input type="text" @bind="_editingUser.DisplayName" />
+                        </div>
+                        <div class="form-group">
+                            <label>Email *</label>
+                            <input type="email" @bind="_editingUser.Mail" />
+                        </div>
+                        <div class="form-group">
+                            <label>Given Name</label>
+                            <input type="text" @bind="_editingUser.GivenName" />
+                        </div>
+                        <div class="form-group">
+                            <label>Surname</label>
+                            <input type="text" @bind="_editingUser.Surname" />
+                        </div>
+                        <div class="form-group">
+                            <label>Department</label>
+                            <input type="text" @bind="_editingUser.Department" />
+                        </div>
+                        <div class="form-group">
+                            <label>Job Title</label>
+                            <input type="text" @bind="_editingUser.JobTitle" />
+                        </div>
+                        <div class="form-group">
+                            <label>Mobile Phone</label>
+                            <input type="text" @bind="_editingUser.MobilePhone" />
+                        </div>
+                        <div class="form-group">
+                            <label>Office Location</label>
+                            <input type="text" @bind="_editingUser.OfficeLocation" />
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" @bind="_editingUser.AccountEnabled" />
+                                Account Enabled
+                            </label>
+                        </div>
+                    </div>
+                }
+
+                @if (_deleteConfirm)
+                {
+                    <div class="confirm-text">
+                        <p>Are you sure you want to delete <strong>@_editingUser?.DisplayName</strong>?</p>
+                        <p style="color: #ef4444; font-size: 0.9rem;">This action cannot be undone.</p>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                @if (_deleteConfirm)
+                {
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+                }
+                else
+                {
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveUser">Save</button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TheItemsThingLib.User> _users = new();
+    private List<TheItemsThingLib.User> _filteredUsers = new();
+    private UserFormDto? _editingUser;
+    private bool _showModal = false;
+    private bool _deleteConfirm = false;
+    private bool _loading = true;
+    private string? _error;
+    private string _searchTerm = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadUsers();
+    }
+
+    private async Task ReloadUsers()
+    {
+        _loading = true;
+        _error = null;
+        _filteredUsers.Clear();
+
+        try
+        {
+            _users = (await ContactsService.ListUsersAsync(maxResults: 500)).ToList();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load users: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        _filteredUsers = string.IsNullOrEmpty(_searchTerm)
+            ? _users.ToList()
+            : _users.Where(u => 
+                (u.DisplayName?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (u.Mail?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (u.Department?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyFilter();
+    }
+
+    private void OpenCreate()
+    {
+        _editingUser = new UserFormDto { AccountEnabled = true };
+        _deleteConfirm = false;
+        _showModal = true;
+    }
+
+    private void OpenEdit(TheItemsThingLib.User user)
+    {
+        _editingUser = new UserFormDto 
+        { 
+            Id = user.Id,
+            DisplayName = user.DisplayName ?? string.Empty,
+            GivenName = user.GivenName,
+            Surname = user.Surname,
+            Mail = user.Mail ?? string.Empty,
+            Department = user.Department,
+            JobTitle = user.JobTitle,
+            MobilePhone = user.MobilePhone,
+            OfficeLocation = user.OfficeLocation,
+            AccountEnabled = user.AccountEnabled
+        };
+        _deleteConfirm = false;
+        _showModal = true;
+    }
+
+    private void OpenDelete(TheItemsThingLib.User user)
+    {
+        _editingUser = new UserFormDto 
+        { 
+            Id = user.Id,
+            DisplayName = user.DisplayName ?? string.Empty,
+            Mail = user.Mail ?? string.Empty
+        };
+        _deleteConfirm = true;
+        _showModal = true;
+    }
+
+    private async Task SaveUser()
+    {
+        if (_editingUser == null || string.IsNullOrEmpty(_editingUser.DisplayName))
+        {
+            _error = "Display Name is required.";
+            return;
+        }
+
+        try
+        {
+            _loading = true;
+
+            if (string.IsNullOrEmpty(_editingUser.Id))
+            {
+                // Create new user
+                var newUser = new NewUser
+                {
+                    DisplayName = _editingUser.DisplayName,
+                    UserPrincipalName = _editingUser.Mail ?? $"{_editingUser.DisplayName.Replace(" ", "").ToLower()}@contoso.com",
+                    MailNickname = _editingUser.DisplayName.Replace(" ", "").ToLower(),
+                    Password = "TempPassword123!",
+                    GivenName = _editingUser.GivenName,
+                    Surname = _editingUser.Surname,
+                    JobTitle = _editingUser.JobTitle,
+                    Department = _editingUser.Department,
+                    MobilePhone = _editingUser.MobilePhone,
+                    OfficeLocation = _editingUser.OfficeLocation,
+                    AccountEnabled = _editingUser.AccountEnabled
+                };
+
+                await ContactsService.CreateUserAsync(newUser);
+            }
+            else
+            {
+                // Update existing user
+                var updateUser = new UpdateUser
+                {
+                    DisplayName = _editingUser.DisplayName,
+                    GivenName = _editingUser.GivenName,
+                    Surname = _editingUser.Surname,
+                    JobTitle = _editingUser.JobTitle,
+                    Department = _editingUser.Department,
+                    MobilePhone = _editingUser.MobilePhone,
+                    OfficeLocation = _editingUser.OfficeLocation,
+                    AccountEnabled = _editingUser.AccountEnabled
+                };
+
+                await ContactsService.UpdateUserAsync(_editingUser.Id, updateUser);
+            }
+
+            CloseModal();
+            await ReloadUsers();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to save user: {ex.Message}";
+            _loading = false;
+        }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_editingUser?.Id != null)
+        {
+            try
+            {
+                _loading = true;
+                await ContactsService.DeleteUserAsync(_editingUser.Id);
+                CloseModal();
+                await ReloadUsers();
+            }
+            catch (Exception ex)
+            {
+                _error = $"Failed to delete user: {ex.Message}";
+                _loading = false;
+            }
+        }
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingUser = null;
+        _deleteConfirm = false;
+        _error = null;
+    }
+
+    public class UserFormDto
+    {
+        public string? Id { get; set; }
+        public string DisplayName { get; set; } = string.Empty;
+        public string Mail { get; set; } = string.Empty;
+        public string? GivenName { get; set; }
+        public string? Surname { get; set; }
+        public string? Department { get; set; }
+        public string? JobTitle { get; set; }
+        public string? MobilePhone { get; set; }
+        public string? OfficeLocation { get; set; }
+        public bool AccountEnabled { get; set; }
+    }
+}

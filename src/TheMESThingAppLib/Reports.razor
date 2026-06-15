@@ -1,0 +1,97 @@
+@page "/mes/reports"
+@rendermode InteractiveServer
+@inject IPowerBIService PowerBI
+@inject IJSRuntime JS
+
+<PageTitle>Reports</PageTitle>
+
+<div class="card report-card">
+    <div class="card-header">
+        <h2 class="card-title">📊 Reports</h2>
+    </div>
+
+    @if (_reportDefs.Count == 0)
+    {
+        <p class="loading">No reports configured. Add entries to the <code>PowerBI:Reports</code> section in appsettings.json.</p>
+    }
+    else
+    {
+        @if (_reportDefs.Count > 0)
+        {
+            <div class="report-tabs">
+                @foreach (var (r, i) in _reportDefs.Select((r, i) => (r, i)))
+                {
+                    <button class="report-tab @(_active == i ? "report-tab-active" : "")"
+                            @onclick="() => SwitchReport(i)"
+                            disabled="@_loading">
+                        @r.Name
+                    </button>
+                }
+            </div>
+        }
+
+        @if (_error != null)
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <div class="report-frame-wrapper">
+            @if (_loading)
+            {
+                <p class="loading">Loading report…</p>
+            }
+            <div id="powerbi-container" class="powerbi-container @(_loading ? "pbi-hidden" : "")"></div>
+        </div>
+    }
+</div>
+
+@code {
+    int _active;
+    bool _loading;
+    string? _error;
+    IReadOnlyList<PowerBIReportDef> _reportDefs = [];
+
+    protected override void OnInitialized()
+    {
+        _reportDefs = PowerBI.GetReportDefinitions();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _reportDefs.Count > 0)
+        {
+            await JS.InvokeVoidAsync("powerBiEmbed.loadLibrary");
+            await LoadReport(_active);
+        }
+    }
+
+    async Task SwitchReport(int index)
+    {
+        if (_active == index || _loading) return;
+        _active = index;
+        await LoadReport(index);
+    }
+
+    async Task LoadReport(int index)
+    {
+        _loading = true; _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var def = _reportDefs[index];
+            var cfg = await PowerBI.GetEmbedConfigAsync(def.WorkspaceId, def.ReportId);
+            await JS.InvokeVoidAsync("powerBiEmbed.reset", "powerbi-container");
+            await JS.InvokeVoidAsync("powerBiEmbed.embed", "powerbi-container", cfg);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+}

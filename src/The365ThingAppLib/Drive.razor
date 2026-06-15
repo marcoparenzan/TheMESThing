@@ -1,0 +1,414 @@
+@page "/office365/drive"
+@rendermode InteractiveServer
+@inject IDriveService DriveService
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Drive</PageTitle>
+
+<HeadContent>
+    <script>
+        window.triggerFileDownload = function (fileName, base64Content) {
+            const bytes = Uint8Array.from(atob(base64Content), c => c.charCodeAt(0));
+            const blob = new Blob([bytes], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+    </script>
+</HeadContent>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">📁 OneDrive</h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            @if (!IsRoot)
+            {
+                <button class="btn btn-secondary" @onclick="GoBack">← Back</button>
+            }
+            <button class="btn btn-primary" @onclick="OpenUploadModal">↑ Upload</button>
+        </div>
+    </div>
+
+    @* Breadcrumb *@
+    <div style="padding: 0.4rem 1.5rem; font-size: 0.85rem; border-bottom: 1px solid #e5e7eb;">
+        <span style="cursor: pointer; color: #2563eb;" @onclick="LoadRoot">OneDrive</span>
+        @for (int i = 0; i < BreadcrumbSegments.Count; i++)
+        {
+            var seg   = BreadcrumbSegments[i];
+            var depth = i + 1;
+            var last  = i == BreadcrumbSegments.Count - 1;
+            <span style="color: #9ca3af;"> / </span>
+            if (!last)
+            {
+                <span style="cursor: pointer; color: #2563eb;" @onclick="@(() => NavigateToDepth(depth))">@seg.Name</span>
+            }
+            else
+            {
+                <span style="font-weight: 600; color: #374151;">@seg.Name</span>
+            }
+        }
+    </div>
+
+    @if (_error != null)
+    {
+        <div class="alert alert-danger" style="margin: 0.75rem 1.5rem 0;">
+            @_error
+            <button @onclick="() => _error = null"
+                    style="float: right; background: none; border: none; cursor: pointer; font-size: 1rem; line-height: 1;">✕</button>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div style="padding: 1.25rem 1.5rem;">
+            <p class="loading">Loading…</p>
+        </div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div style="padding: 1.25rem 1.5rem;">
+            <p class="text-muted">Folder is empty.</p>
+        </div>
+    }
+    else
+    {
+        <div style="padding: 1.25rem 1.5rem;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Size</th>
+                        <th>Modified</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _items)
+                    {
+                        <tr>
+                            <td>
+                                @if (item.IsFolder)
+                                {
+                                    <span style="cursor: pointer; color: #2563eb;" @onclick="@(() => OpenFolder(item))">
+                                        📁 <strong>@item.Name</strong>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>@GetFileIcon(item.MimeType) @item.Name</span>
+                                }
+                            </td>
+                            <td>
+                                @if (item.IsFolder)
+                                {
+                                    <span class="badge badge-info">Folder</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">@GetFileType(item.MimeType)</span>
+                                }
+                            </td>
+                            <td><span class="text-muted">@(item.Size.HasValue ? FormatSize(item.Size.Value) : "-")</span></td>
+                            <td><span class="text-muted">@(item.ModifiedDateTime?.ToString("g") ?? "-")</span></td>
+                            <td>
+                                <div style="display: flex; gap: 0.25rem;">
+                                    @if (!item.IsFolder)
+                                    {
+                                        <button class="btn btn-icon" title="Download" @onclick="@(() => DownloadFile(item))">⬇️</button>
+                                    }
+                                    <button class="btn btn-icon" title="Delete" @onclick="@(() => ConfirmDelete(item))">🗑️</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@* ── Upload Modal ────────────────────────────────────────────────────────── *@
+@if (_showUploadModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">Upload File</h3>
+                <button class="btn btn-icon" @onclick="CloseUploadModal" disabled="@_uploading">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid cols-1">
+                    <div class="form-group">
+                        <label>Select file</label>
+                        <InputFile class="form-control" OnChange="OnFileSelected" />
+                    </div>
+                    @if (_selectedFile != null)
+                    {
+                        <div style="font-size: 0.85rem; color: #6b7280; margin-top: -0.5rem;">
+                            <strong>@_selectedFile.Name</strong> — @FormatSize(_selectedFile.Size)
+                        </div>
+                    }
+                    @if (_uploadError != null)
+                    {
+                        <div class="alert alert-danger">@_uploadError</div>
+                    }
+                    @if (_uploading)
+                    {
+                        <p class="loading">Uploading…</p>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseUploadModal" disabled="@_uploading">Cancel</button>
+                <button class="btn btn-primary" @onclick="HandleUpload" disabled="@(_uploading || _selectedFile == null)">Upload</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Delete Confirmation Modal ───────────────────────────────────────────── *@
+@if (_itemToDelete != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">Confirm Delete</h3>
+            </div>
+            <div class="modal-body">
+                <p>Delete <strong>@_itemToDelete.Name</strong>?</p>
+                @if (_itemToDelete.IsFolder)
+                {
+                    <div class="alert alert-danger" style="margin-top: 0.5rem;">
+                        Warning: this will also delete all contents of the folder.
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _itemToDelete = null">Cancel</button>
+                <button class="btn btn-primary" style="background: #dc2626; border-color: #dc2626;"
+                        @onclick="DeleteItem">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _userUpn = string.Empty;
+
+    private List<DriveItem> _items = [];
+    private readonly Stack<(string Id, string Name)> _navStack = new();
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _showUploadModal;
+    private bool _uploading;
+    private IBrowserFile? _selectedFile;
+    private string? _uploadError;
+
+    private DriveItem? _itemToDelete;
+
+    private bool IsRoot => _navStack.Count == 0;
+    private string CurrentFolderId => IsRoot ? "root" : _navStack.Peek().Id;
+    private IReadOnlyList<(string Id, string Name)> BreadcrumbSegments => _navStack.Reverse().ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userUpn = auth.User.FindFirst("preferred_username")?.Value
+            ?? auth.User.Identity?.Name
+            ?? throw new InvalidOperationException("User not authenticated.");
+        await LoadCurrentFolder();
+    }
+
+    // ── Navigation ────────────────────────────────────────────────────────────
+
+    private async Task LoadCurrentFolder()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = (IsRoot
+                ? await DriveService.ListRootItemsAsync(_userUpn)
+                : await DriveService.ListItemsByIdAsync(_userUpn, CurrentFolderId))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadRoot()
+    {
+        _navStack.Clear();
+        await LoadCurrentFolder();
+    }
+
+    private async Task OpenFolder(DriveItem folder)
+    {
+        _navStack.Push((folder.Id, folder.Name));
+        await LoadCurrentFolder();
+    }
+
+    private async Task GoBack()
+    {
+        if (!IsRoot) _navStack.Pop();
+        await LoadCurrentFolder();
+    }
+
+    private async Task NavigateToDepth(int depth)
+    {
+        while (_navStack.Count > depth) _navStack.Pop();
+        await LoadCurrentFolder();
+    }
+
+    // ── Upload ────────────────────────────────────────────────────────────────
+
+    private void OpenUploadModal()
+    {
+        _selectedFile = null;
+        _uploadError = null;
+        _showUploadModal = true;
+    }
+
+    private void CloseUploadModal()
+    {
+        if (!_uploading) _showUploadModal = false;
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _uploadError = null;
+    }
+
+    private async Task HandleUpload()
+    {
+        if (_selectedFile is null) return;
+
+        _uploading = true;
+        _uploadError = null;
+
+        try
+        {
+            const long maxSize = 250L * 1024 * 1024; // 250 MB
+            using var stream = _selectedFile.OpenReadStream(maxSize);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+
+            var uploaded = await DriveService.UploadFileAsync(_userUpn, CurrentFolderId, new DriveUploadFile
+            {
+                Name    = _selectedFile.Name,
+                Content = ms.ToArray()
+            });
+
+            if (uploaded is not null)
+            {
+                _items.Add(uploaded);
+                _items = _items.OrderByDescending(x => x.IsFolder).ThenBy(x => x.Name).ToList();
+                _showUploadModal = false;
+                _selectedFile = null;
+            }
+            else
+            {
+                _uploadError = "Upload failed.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _uploadError = ex.Message;
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    // ── Download ──────────────────────────────────────────────────────────────
+
+    private async Task DownloadFile(DriveItem file)
+    {
+        _error = null;
+        try
+        {
+            var content = await DriveService.DownloadFileAsync(_userUpn, file.Id);
+            if (content is null) { _error = "Download failed."; return; }
+            await JS.InvokeVoidAsync("triggerFileDownload", file.Name, Convert.ToBase64String(content));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────────
+
+    private void ConfirmDelete(DriveItem item) => _itemToDelete = item;
+
+    private async Task DeleteItem()
+    {
+        if (_itemToDelete is null) return;
+        var target = _itemToDelete;
+        _itemToDelete = null;
+        try
+        {
+            if (await DriveService.DeleteItemAsync(_userUpn, target.Id))
+                _items.Remove(target);
+            else
+                _error = "Delete failed.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static string FormatSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB"];
+        double v = bytes;
+        int i = 0;
+        while (v >= 1024 && i < units.Length - 1) { v /= 1024; i++; }
+        return $"{v:0.#} {units[i]}";
+    }
+
+    private static string GetFileType(string? mime) => mime switch
+    {
+        var m when m?.Contains("word")         == true => "DOC",
+        var m when m?.Contains("sheet")        == true => "XLS",
+        var m when m?.Contains("presentation") == true => "PPT",
+        var m when m?.Contains("pdf")          == true => "PDF",
+        var m when m?.Contains("image")        == true => "IMG",
+        var m when m?.Contains("audio")        == true => "AUD",
+        var m when m?.Contains("video")        == true => "VID",
+        var m when m?.Contains("text")         == true => "TXT",
+        _                                              => "FILE"
+    };
+
+    private static string GetFileIcon(string? mime) => mime switch
+    {
+        var m when m?.Contains("word")         == true => "📝",
+        var m when m?.Contains("sheet")        == true => "📊",
+        var m when m?.Contains("presentation") == true => "📊",
+        var m when m?.Contains("pdf")          == true => "📄",
+        var m when m?.Contains("image")        == true => "🖼️",
+        var m when m?.Contains("audio")        == true => "🎵",
+        var m when m?.Contains("video")        == true => "🎬",
+        var m when m?.Contains("zip")          == true => "🗜️",
+        _                                              => "📄"
+    };
+}

@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/1. 365/">
+    <Project Path="The365ThingAppLib/The365ThingAppLib.csproj" />
+    <Project Path="The365ThingClientApp/The365ThingClientApp.csproj" />
+    <Project Path="The365ThingLib/The365ThingLib.csproj" Id="cc6ab10d-ac02-4e41-88b0-6b483181e4d3" />
+    <Project Path="TheItemsThingLib/TheItemsThingLib.csproj" />
+  </Folder>
+  <Folder Name="/2. API/">
+    <Project Path="TheMESItemsThingLib/TheMESItemsThingLib.csproj" Id="9af40602-e07d-4d67-8156-108beba95d15" />
+    <Project Path="TheMESThingAPI/TheMESThingAPI.csproj" />
+    <Project Path="TheMESThingData/TheMESThingData.csproj" />
+    <Project Path="TheMESThingLib/TheMESThingLib.csproj" Id="0af28692-e502-4a14-be7e-630f7b4db8db" />
+  </Folder>
+  <Folder Name="/3. MES/">
+    <Project Path="TheMESThingAPIClientLib/TheMESThingAPIClientLib.csproj" Id="113c5b46-d1fb-4b29-994f-30f88d711d4a" />
+    <Project Path="TheMESThingApp/TheMESThingApp.csproj" />
+    <Project Path="TheMESThingAppLib/TheMESThingAppLib.csproj" Id="28039508-2729-4f85-b915-39632dd4051c" />
+  </Folder>
+</Solution>

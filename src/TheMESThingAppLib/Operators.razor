@@ -1,0 +1,140 @@
+@page "/mes/operators"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Operators</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">👷 Operators</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Operator</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Code</th><th>First Name</th><th>Last Name</th><th>Badge</th><th>Hire Date</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var o in _items)
+                {
+                    <tr>
+                        <td><strong>@o.OperatorCode</strong></td>
+                        <td>@o.FirstName</td>
+                        <td>@o.LastName</td>
+                        <td><span class="text-muted">@o.BadgeNumber</span></td>
+                        <td><span class="text-muted">@o.HireDate?.ToString("yyyy-MM-dd")</span></td>
+                        <td><span class="badge @(o.IsActive ? "badge-success" : "badge-danger")">@(o.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(o)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(o)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Operator" : "New Operator")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Code *</label><input @bind="_form.OperatorCode" /></div>
+                    <div class="form-group"><label>Badge Number</label><input @bind="_form.BadgeNumber" /></div>
+                    <div class="form-group"><label>First Name *</label><input @bind="_form.FirstName" /></div>
+                    <div class="form-group"><label>Last Name *</label><input @bind="_form.LastName" /></div>
+                    <div class="form-group"><label>Hire Date</label><input type="date" @bind="_form.HireDate" /></div>
+                    <div class="form-group"><label>Active</label><input type="checkbox" @bind="_form.IsActive" style="width:auto" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Operator</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.FirstName @_deleteTarget.LastName</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<Operator>? _paged;
+    List<Operator> _items = [];
+    Operator? _deleteTarget;
+    OperatorForm _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetOperatorsAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(Operator o)
+    {
+        _form = new() { Id = o.OperatorId, TenantId = o.TenantId, OperatorCode = o.OperatorCode, FirstName = o.FirstName, LastName = o.LastName, BadgeNumber = o.BadgeNumber, HireDate = o.HireDate?.ToDateTime(TimeOnly.MinValue), IsActive = o.IsActive };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(Operator o) => _deleteTarget = o;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var hire = _form.HireDate.HasValue ? DateOnly.FromDateTime(_form.HireDate.Value) : (DateOnly?)null;
+            var o = new Operator(_editing ? _form.Id : Guid.Empty, _form.TenantId, null, null, _form.OperatorCode, _form.FirstName, _form.LastName, _form.BadgeNumber, null, _form.IsActive, hire, DateTime.UtcNow, DateTime.UtcNow);
+            if (_editing) await Api.UpdateOperatorAsync(_form.Id, o);
+            else await Api.CreateOperatorAsync(o);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteOperatorAsync(_deleteTarget!.OperatorId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class OperatorForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public string OperatorCode { get; set; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string? BadgeNumber { get; set; }
+        public DateTime? HireDate { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

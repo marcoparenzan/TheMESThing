@@ -1,0 +1,136 @@
+@page "/mes/skills"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Skills</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">🎓 Skills</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Skill</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Description</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _items)
+                {
+                    <tr>
+                        <td><strong>@s.SkillCode</strong></td>
+                        <td>@s.SkillName</td>
+                        <td><span class="badge badge-info">@s.Category</span></td>
+                        <td><span class="text-muted">@s.Description</span></td>
+                        <td><span class="badge @(s.IsActive ? "badge-success" : "badge-danger")">@(s.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(s)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(s)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Skill" : "New Skill")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Code *</label><input @bind="_form.SkillCode" /></div>
+                    <div class="form-group"><label>Name *</label><input @bind="_form.SkillName" /></div>
+                    <div class="form-group"><label>Category</label><input @bind="_form.Category" /></div>
+                    <div class="form-group"><label>Active</label><input type="checkbox" @bind="_form.IsActive" style="width:auto" /></div>
+                    <div class="form-group full-width"><label>Description</label><textarea @bind="_form.Description" rows="2"></textarea></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Skill</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.SkillName</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<Skill>? _paged;
+    List<Skill> _items = [];
+    Skill? _deleteTarget;
+    SkillForm _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetSkillsAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(Skill s)
+    {
+        _form = new() { Id = s.SkillId, TenantId = s.TenantId, SkillCode = s.SkillCode, SkillName = s.SkillName, Category = s.Category, Description = s.Description, IsActive = s.IsActive };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(Skill s) => _deleteTarget = s;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var s = new Skill(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.SkillCode, _form.SkillName, _form.Category, _form.Description, _form.IsActive, DateTime.UtcNow);
+            if (_editing) await Api.UpdateSkillAsync(_form.Id, s);
+            else await Api.CreateSkillAsync(s);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteSkillAsync(_deleteTarget!.SkillId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class SkillForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public string SkillCode { get; set; } = "";
+        public string SkillName { get; set; } = "";
+        public string? Category { get; set; }
+        public string? Description { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

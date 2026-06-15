@@ -1,0 +1,23 @@
+<nav class="sidebar">
+    <div class="sidebar-header">
+        <span class="sidebar-brand">⚙ The MES Thing</span>
+    </div>
+    <div class="sidebar-user">
+        <AuthorizeView>
+            <Authorized>
+                <TheMESThingAppLib.NavMenu></TheMESThingAppLib.NavMenu>
+                <The365ThingAppLib.NavMenu></The365ThingAppLib.NavMenu>
+                <div class="sidebar-section">@context.User.Identity?.Name</div>
+                <NavLink class="nav-item" href="/account/logout" Match="NavLinkMatch.Prefix">
+                    <span class="nav-icon">🤝</span> Sign out
+                </NavLink>
+            </Authorized>
+            <NotAuthorized>
+                <div class="sidebar-section">User</div>
+                <NavLink class="nav-item" href="/account/login" Match="NavLinkMatch.Prefix">
+                    <span class="nav-icon">🤝</span> Sign in
+                </NavLink>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</nav>

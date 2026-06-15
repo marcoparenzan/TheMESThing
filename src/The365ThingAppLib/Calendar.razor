@@ -1,0 +1,439 @@
+@page "/office365/calendar"
+@rendermode InteractiveServer
+@inject ICalendarService CalendarService
+
+<PageTitle>Calendar</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">📅 Calendar</h2>
+        <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary" @onclick="PreviousMonth">← Previous</button>
+            <span style="padding: 0.35rem 0.85rem; font-weight: 500;">@_currentDate.ToString("MMMM yyyy")</span>
+            <button class="btn btn-secondary" @onclick="NextMonth">Next →</button>
+            <button class="btn btn-primary" @onclick="OpenCreateEvent">+ New Event</button>
+        </div>
+    </div>
+
+    @if (_error != null) 
+    { 
+        <div class="alert alert-danger">@_error</div> 
+    }
+
+    @if (_loading)
+    {
+        <div style="padding: 1.25rem 1.5rem;">
+            <p class="loading">Loading calendar…</p>
+        </div>
+    }
+    else
+    {
+        <div style="padding: 1.25rem 1.5rem; overflow-x: auto;">
+            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; min-width: 100%;">
+                @foreach (var dayName in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
+                {
+                    <div style="text-align: center; font-weight: 600; padding: 0.5rem; background: #f0f3f7; border-radius: 4px;">
+                        @dayName
+                    </div>
+                }
+
+                @foreach (var day in _calendarDays)
+                {
+                    <div style="@GetDayStyle(day)" @onclick="@(() => SelectDay(day))">
+                        <div style="font-weight: 500; margin-bottom: 0.25rem;">@day.Day</div>
+                        <div style="font-size: 0.75rem;">
+                            @foreach (var evt in day.Events.Take(2))
+                            {
+                                <div style="background: #dbeafe; color: #1e40af; padding: 0.15rem 0.3rem; border-radius: 2px; margin-bottom: 0.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    @evt.Subject
+                                </div>
+                            }
+                            @if (day.Events.Count > 2)
+                            {
+                                <div style="font-size: 0.7rem; color: #6b7280;">+@(day.Events.Count - 2) more</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (_selectedDay != null && _selectedDay.Events.Count > 0)
+            {
+                <div style="margin-top: 2rem;">
+                    <h3>Events for @_selectedDay.Date.ToString("dddd, MMMM d, yyyy")</h3>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        @foreach (var evt in _selectedDay.Events)
+                        {
+                            <div class="card" style="border-left: 4px solid @(evt.IsAllDay ? "#10b981" : "#3b82f6"); margin-bottom: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div>
+                                        <strong>@evt.Subject</strong>
+                                        @if (!evt.IsAllDay && evt.Start.HasValue && evt.End.HasValue)
+                                        {
+                                            <div style="font-size: 0.85rem; color: #6b7280;">
+                                                @string.Format("{0:h:mm tt}", evt.Start.Value.UtcDateTime) - @string.Format("{0:h:mm tt}", evt.End.Value.UtcDateTime)
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(evt.BodyContent))
+                                        {
+                                            <div style="font-size: 0.85rem; color: #4b5563; margin-top: 0.25rem;">@evt.BodyContent</div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(evt.Location))
+                                        {
+                                            <div style="font-size: 0.85rem; color: #6b7280;">📍 @evt.Location</div>
+                                        }
+                                        @if (evt.IsOnlineMeeting && !string.IsNullOrEmpty(evt.OnlineMeetingUrl))
+                                        {
+                                            <div style="font-size: 0.85rem;"><a href="@evt.OnlineMeetingUrl" target="_blank">🎥 Join Meeting</a></div>
+                                        }
+                                    </div>
+                                    <div style="display: flex; gap: 0.25rem;">
+                                        <button class="btn btn-icon" title="Edit" @onclick="@(() => OpenEditEvent(evt))">✏️</button>
+                                        <button class="btn btn-icon" title="Delete" @onclick="@(() => DeleteEvent(evt))">🗑️</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_showEventModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">@(_editingEvent?.Id == null ? "New Event" : "Edit Event")</h3>
+                <button class="btn btn-icon" @onclick="CloseEventModal">✕</button>
+            </div>
+
+            <div class="modal-body">
+                @if (_editingEvent != null)
+                {
+                    <div class="form-grid cols-1">
+                        <div class="form-group">
+                            <label>Event Title *</label>
+                            <input type="text" @bind="_editingEvent.Title" />
+                        </div>
+                        <div class="form-group">
+                            <label>Date *</label>
+                            <input type="date" @bind="_editingEvent.EventDate" />
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" @bind="_editingEvent.IsAllDay" />
+                                All Day Event
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" @bind="_editingEvent.Location" />
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea @bind="_editingEvent.Description" style="min-height: 80px;"></textarea>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseEventModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveEvent">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DateTime _currentDate = DateTime.Now;
+    private List<CalendarDay> _calendarDays = new();
+    private List<CalendarEvent> _events = new();
+    private CalendarDay? _selectedDay;
+    private EventDto? _editingEvent;
+    private bool _showEventModal = false;
+    private string? _error;
+    private bool _loading = true;
+    private string _userIdOrUpn = "jean-luc.picard@utopiaforge.onmicrosoft.com"; // Default to current user
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEventsAsync();
+    }
+
+    private async Task LoadEventsAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var firstDay = new DateTime(_currentDate.Year, _currentDate.Month, 1);
+            var lastDay = firstDay.AddMonths(1).AddDays(-1);
+
+            var start = new DateTimeOffset(firstDay, TimeSpan.Zero);
+            var end = new DateTimeOffset(lastDay.AddDays(1), TimeSpan.Zero);
+
+            _events = (await CalendarService.ListEventsAsync(_userIdOrUpn, start, end, 500)).ToList();
+            GenerateCalendarDays();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load calendar events: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void GenerateCalendarDays()
+    {
+        _calendarDays.Clear();
+        var firstDay = new DateTime(_currentDate.Year, _currentDate.Month, 1);
+        var lastDay = firstDay.AddMonths(1).AddDays(-1);
+        int daysInMonth = lastDay.Day;
+        int startDayOfWeek = (int)firstDay.DayOfWeek;
+
+        // Add empty days for days before the month starts
+        for (int i = 0; i < startDayOfWeek; i++)
+        {
+            _calendarDays.Add(new CalendarDay { Day = 0, IsCurrentMonth = false, Date = DateTime.MinValue });
+        }
+
+        // Add days of the month
+        for (int day = 1; day <= daysInMonth; day++)
+        {
+            var date = new DateTime(_currentDate.Year, _currentDate.Month, day);
+            var calendarDay = new CalendarDay 
+            { 
+                Day = day, 
+                IsCurrentMonth = true,
+                Date = date
+            };
+
+            // Assign events to this day - properly handle all-day events
+            calendarDay.Events = _events
+                .Where(e => IsEventOnDate(e, date))
+                .ToList();
+            _calendarDays.Add(calendarDay);
+        }
+
+        // Add empty days for days after the month ends
+        int totalCells = _calendarDays.Count;
+        int remainingCells = 42 - totalCells;
+        for (int i = 0; i < remainingCells; i++)
+        {
+            _calendarDays.Add(new CalendarDay { Day = 0, IsCurrentMonth = false, Date = DateTime.MinValue });
+        }
+    }
+
+    /// <summary>
+    /// Determines if an event occurs on a specific date, handling all-day events properly.
+    /// </summary>
+    private bool IsEventOnDate(CalendarEvent evt, DateTime date)
+    {
+        if (evt.Start == null)
+            return false;
+
+        var startDate = evt.Start.Value.UtcDateTime.Date;
+        var endDate = evt.End?.UtcDateTime.Date ?? startDate;
+
+        // For all-day events, only check if date falls within the event range
+        if (evt.IsAllDay)
+        {
+            return date >= startDate && date <= endDate;
+        }
+
+        // For timed events, check if event occurs on this date
+        return date == startDate || date == endDate || (date > startDate && date < endDate);
+    }
+
+    private string GetDayStyle(CalendarDay day)
+    {
+        var style = "border: 1px solid #e2e8f0; padding: 0.5rem; border-radius: 6px; min-height: 100px; background: #fff; cursor: pointer; transition: background 0.15s;";
+
+        if (!day.IsCurrentMonth)
+            style += " opacity: 0.5; background: #f8fafc;";
+        else if (day.Day == DateTime.Now.Day && _currentDate.Month == DateTime.Now.Month && _currentDate.Year == DateTime.Now.Year)
+            style += " background: #eff6ff; border: 2px solid #3b82f6;";
+        else if (_selectedDay?.Date == day.Date)
+            style += " background: #dbeafe; border: 2px solid #0ea5e9;";
+
+        return style;
+    }
+
+    private void SelectDay(CalendarDay day)
+    {
+        if (day.IsCurrentMonth)
+            _selectedDay = day;
+    }
+
+    private async Task PreviousMonth()
+    {
+        _currentDate = _currentDate.AddMonths(-1);
+        await LoadEventsAsync();
+        _selectedDay = null;
+    }
+
+    private async Task NextMonth()
+    {
+        _currentDate = _currentDate.AddMonths(1);
+        await LoadEventsAsync();
+        _selectedDay = null;
+    }
+
+    private void OpenCreateEvent()
+    {
+        var eventDate = _selectedDay?.Date ?? DateTime.Today;
+
+        _editingEvent = new EventDto 
+        { 
+            EventDate = eventDate,
+            IsAllDay = true,
+            StartTime = eventDate.AddHours(9),
+            EndTime = eventDate.AddHours(10)
+        };
+        _showEventModal = true;
+    }
+
+    private void OpenEditEvent(CalendarEvent evt)
+    {
+        var startDateTime = evt.Start?.UtcDateTime ?? DateTime.Now;
+        var endDateTime = evt.End?.UtcDateTime ?? DateTime.Now.AddHours(1);
+        var eventDate = startDateTime.Date;
+
+        _editingEvent = new EventDto 
+        { 
+            Id = evt.Id,
+            Title = evt.Subject ?? string.Empty,
+            EventDate = eventDate,
+            IsAllDay = evt.IsAllDay,
+            StartTime = startDateTime,
+            EndTime = endDateTime,
+            Location = evt.Location,
+            Description = evt.BodyContent
+        };
+        _showEventModal = true;
+    }
+
+    private async Task DeleteEvent(CalendarEvent evt)
+    {
+        try
+        {
+            _loading = true;
+            await CalendarService.DeleteEventAsync(_userIdOrUpn, evt.Id);
+            await LoadEventsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to delete event: {ex.Message}";
+            _loading = false;
+        }
+    }
+
+    private async Task SaveEvent()
+    {
+        if (_editingEvent == null || string.IsNullOrEmpty(_editingEvent.Title))
+        {
+            _error = "Event title is required.";
+            return;
+        }
+
+        try
+        {
+            _loading = true;
+            _error = null;
+
+            // For all-day events, ensure times are set to start and end of day
+            var startTime = _editingEvent.StartTime;
+            var endTime = _editingEvent.EndTime;
+
+            if (_editingEvent.IsAllDay)
+            {
+                // For all-day events, set to midnight of the event date
+                startTime = _editingEvent.EventDate.Date.AddHours(0);
+                endTime = _editingEvent.EventDate.Date.AddDays(1).AddHours(0);
+            }
+            else
+            {
+                // For timed events, ensure they're on the event date
+                startTime = _editingEvent.EventDate.Date.Add(startTime.TimeOfDay);
+                endTime = _editingEvent.EventDate.Date.Add(endTime.TimeOfDay);
+
+                // Ensure end time is after start time
+                if (endTime <= startTime)
+                    endTime = startTime.AddHours(1);
+            }
+
+            if (string.IsNullOrEmpty(_editingEvent.Id))
+            {
+                // Create new event
+                var newEvent = new NewM365CalendarEvent
+                {
+                    Subject = _editingEvent.Title,
+                    Start = new DateTimeOffset(startTime),
+                    End = new DateTimeOffset(endTime),
+                    BodyContent = _editingEvent.Description,
+                    Location = _editingEvent.Location,
+                    IsAllDay = _editingEvent.IsAllDay
+                };
+
+                await CalendarService.CreateEventAsync(_userIdOrUpn, newEvent);
+            }
+            else
+            {
+                // Update existing event
+                var updateEvent = new UpdateCalendarEvent
+                {
+                    Subject = _editingEvent.Title,
+                    Start = new DateTimeOffset(startTime),
+                    End = new DateTimeOffset(endTime),
+                    BodyContent = _editingEvent.Description,
+                    Location = _editingEvent.Location,
+                    IsAllDay = _editingEvent.IsAllDay
+                };
+
+                await CalendarService.UpdateEventAsync(_userIdOrUpn, _editingEvent.Id, updateEvent);
+            }
+
+            CloseEventModal();
+            await LoadEventsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to save event: {ex.Message}";
+            _loading = false;
+        }
+    }
+
+    private void CloseEventModal()
+    {
+        _showEventModal = false;
+        _editingEvent = null;
+        _error = null;
+    }
+
+    public class CalendarDay
+    {
+        public int Day { get; set; }
+        public bool IsCurrentMonth { get; set; }
+        public DateTime Date { get; set; }
+        public List<CalendarEvent> Events { get; set; } = new();
+    }
+
+    public class EventDto
+    {
+        public string? Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public DateTime EventDate { get; set; }
+        public bool IsAllDay { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+        public string? Location { get; set; }
+        public string? Description { get; set; }
+    }
+}

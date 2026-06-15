@@ -1,0 +1,119 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <Name>TheMESThingDB</Name>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectVersion>4.1</ProjectVersion>
+    <ProjectGuid>{4bdfe88b-81c9-439c-8a6a-43ecc69a7aec}</ProjectGuid>
+    <DSP>Microsoft.Data.Tools.Schema.Sql.Sql170DatabaseSchemaProvider</DSP>
+    <OutputType>Database</OutputType>
+    <RootPath>
+    </RootPath>
+    <RootNamespace>TheMESThingDB</RootNamespace>
+    <AssemblyName>TheMESThingDB</AssemblyName>
+    <ModelCollation>1033, CI</ModelCollation>
+    <DefaultFileStructure>BySchemaAndSchemaType</DefaultFileStructure>
+    <DeployToDatabase>True</DeployToDatabase>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <TargetLanguage>CS</TargetLanguage>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <SqlServerVerification>False</SqlServerVerification>
+    <IncludeCompositeObjects>True</IncludeCompositeObjects>
+    <TargetDatabaseSet>True</TargetDatabaseSet>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <OutputPath>bin\Release\</OutputPath>
+    <BuildScriptName>$(MSBuildProjectName).sql</BuildScriptName>
+    <TreatWarningsAsErrors>False</TreatWarningsAsErrors>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <OutputPath>bin\Debug\</OutputPath>
+    <BuildScriptName>$(MSBuildProjectName).sql</BuildScriptName>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">11.0</VisualStudioVersion>
+    <!-- Default to the v11.0 targets path if the targets file for the current VS version is not found -->
+    <SSDTExists Condition="Exists('$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\SSDT\Microsoft.Data.Tools.Schema.SqlTasks.targets')">True</SSDTExists>
+    <VisualStudioVersion Condition="'$(SSDTExists)' == ''">11.0</VisualStudioVersion>
+  </PropertyGroup>
+  <Import Condition="'$(SQLDBExtensionsRefPath)' != ''" Project="$(SQLDBExtensionsRefPath)\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
+  <Import Condition="'$(SQLDBExtensionsRefPath)' == ''" Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\SSDT\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
+  <ItemGroup>
+    <Folder Include="Properties" />
+    <Folder Include="security\" />
+    <Folder Include="security\Tables\" />
+    <Folder Include="mes\" />
+    <Folder Include="mes\Tables\" />
+    <Folder Include="iot\" />
+    <Folder Include="iot\Tables\" />
+    <Folder Include="analytics\" />
+    <Folder Include="analytics\Tables\" />
+    <Folder Include="integration\" />
+    <Folder Include="integration\Tables\" />
+    <Folder Include="audit\" />
+    <Folder Include="audit\Tables\" />
+    <Folder Include="Scripts\" />
+    <Folder Include="analytics\Views" />
+    <Folder Include="analytics\StoredProcedures" />
+  </ItemGroup>
+  <ItemGroup>
+    <Build Include="security\Tables\Tenants.sql" />
+    <Build Include="security\Tables\Roles.sql" />
+    <Build Include="security\Tables\Permissions.sql" />
+    <Build Include="security\Tables\RolePermissions.sql" />
+    <Build Include="security\Tables\AppUsers.sql" />
+    <Build Include="security\Tables\UserRoles.sql" />
+    <Build Include="mes\Tables\Customers.sql" />
+    <Build Include="mes\Tables\Departments.sql" />
+    <Build Include="mes\Tables\ProductionLines.sql" />
+    <Build Include="mes\Tables\Machines.sql" />
+    <Build Include="mes\Tables\Skills.sql" />
+    <Build Include="mes\Tables\Operators.sql" />
+    <Build Include="mes\Tables\OperatorSkills.sql" />
+    <Build Include="mes\Tables\MachineSkills.sql" />
+    <Build Include="mes\Tables\Shifts.sql" />
+    <Build Include="mes\Tables\Products.sql" />
+    <Build Include="mes\Tables\WorkOrders.sql" />
+    <Build Include="mes\Tables\ProductionOrders.sql" />
+    <Build Include="iot\Tables\MachineStates.sql" />
+    <Build Include="iot\Tables\MachineStatusHistory.sql" />
+    <Build Include="iot\Tables\MachineEvents.sql" />
+    <Build Include="iot\Tables\MachineTelemetry.sql" />
+    <Build Include="iot\Tables\MachineCycles.sql" />
+    <Build Include="analytics\Tables\KpiDefinitions.sql" />
+    <Build Include="analytics\Tables\OeeCalculations.sql" />
+    <Build Include="analytics\Tables\KpiValues.sql" />
+    <Build Include="analytics\Tables\ShiftReports.sql" />
+    <Build Include="integration\Tables\M365SyncJobs.sql" />
+    <Build Include="integration\Tables\TeamsNotifications.sql" />
+    <Build Include="integration\Tables\CalendarEvents.sql" />
+    <Build Include="audit\Tables\AuditLogs.sql" />
+    <Build Include="security\mes.sql" />
+    <Build Include="security\iot.sql" />
+    <Build Include="security\analytics.sql" />
+    <Build Include="security\integration.sql" />
+    <Build Include="security\security.sql" />
+    <Build Include="security\audit.sql" />
+    <None Include="Scripts\ScriptsIgnoredOnImport.sql" />
+    <Build Include="analytics\Views\MachineCurrentStatus.sql" />
+    <Build Include="analytics\Views\WorkOrderProgress.sql" />
+    <Build Include="analytics\Views\DailyOeeSummary.sql" />
+    <Build Include="analytics\StoredProcedures\CalculateOeeForShift.sql" />
+  </ItemGroup>
+</Project>

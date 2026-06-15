@@ -1,0 +1,159 @@
+@page "/mes/work-orders"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Work Orders</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">📋 Work Orders</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Work Order</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Number</th><th>Description</th><th>Status</th><th>Priority</th><th>Due Date</th><th>Qty</th><th>Completed</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var w in _items)
+                {
+                    <tr>
+                        <td><strong>@w.WorkOrderNumber</strong></td>
+                        <td><span class="text-muted">@w.Description</span></td>
+                        <td><span class="badge @StatusBadge(w.Status)">@w.Status</span></td>
+                        <td>@w.Priority</td>
+                        <td><span class="text-muted">@w.DueDate?.ToString("yyyy-MM-dd")</span></td>
+                        <td>@w.TotalQuantity.ToString("N0")</td>
+                        <td>@w.CompletedQuantity.ToString("N0")</td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(w)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(w)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Work Order" : "New Work Order")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Work Order Number *</label><input @bind="_form.WorkOrderNumber" /></div>
+                    <div class="form-group"><label>Status</label>
+                        <select @bind="_form.Status">
+                            <option>Draft</option><option>Confirmed</option><option>InProgress</option><option>Completed</option><option>Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="form-group full-width"><label>Description</label><textarea @bind="_form.Description" rows="2"></textarea></div>
+                    <div class="form-group"><label>Priority (0-255)</label><input type="number" min="0" max="255" @bind="_form.Priority" /></div>
+                    <div class="form-group"><label>Due Date</label><input type="date" @bind="_form.DueDate" /></div>
+                    <div class="form-group"><label>Planned Start</label><input type="date" @bind="_form.PlannedStartDate" /></div>
+                    <div class="form-group"><label>Total Qty *</label><input type="number" @bind="_form.TotalQuantity" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Work Order</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.WorkOrderNumber</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<WorkOrder>? _paged;
+    List<WorkOrder> _items = [];
+    WorkOrder? _deleteTarget;
+    WoForm _form = new();
+
+    static string StatusBadge(string s) => s switch
+    {
+        "Draft"      => "badge-info",
+        "Confirmed"  => "badge-warning",
+        "InProgress" => "badge-success",
+        "Completed"  => "badge-success",
+        "Cancelled"  => "badge-danger",
+        _            => ""
+    };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetWorkOrdersAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(WorkOrder w)
+    {
+        _form = new() { Id = w.WorkOrderId, TenantId = w.TenantId, CustomerId = w.CustomerId, WorkOrderNumber = w.WorkOrderNumber, Description = w.Description, Status = w.Status, Priority = w.Priority, DueDate = w.DueDate?.ToDateTime(TimeOnly.MinValue), PlannedStartDate = w.PlannedStartDate?.ToDateTime(TimeOnly.MinValue), TotalQuantity = w.TotalQuantity };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(WorkOrder w) => _deleteTarget = w;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var due = _form.DueDate.HasValue ? DateOnly.FromDateTime(_form.DueDate.Value) : (DateOnly?)null;
+            var start = _form.PlannedStartDate.HasValue ? DateOnly.FromDateTime(_form.PlannedStartDate.Value) : (DateOnly?)null;
+            var w = new WorkOrder(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.CustomerId, _form.WorkOrderNumber, _form.Description, _form.Status, _form.Priority, due, start, null, null, _form.TotalQuantity, 0, 0, null, null, DateTime.UtcNow, DateTime.UtcNow, null, null);
+            if (_editing) await Api.UpdateWorkOrderAsync(_form.Id, w);
+            else await Api.CreateWorkOrderAsync(w);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteWorkOrderAsync(_deleteTarget!.WorkOrderId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class WoForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public Guid CustomerId { get; set; }
+        public string WorkOrderNumber { get; set; } = "";
+        public string? Description { get; set; }
+        public string Status { get; set; } = "Draft";
+        public byte Priority { get; set; } = 50;
+        public DateTime? DueDate { get; set; }
+        public DateTime? PlannedStartDate { get; set; }
+        public double TotalQuantity { get; set; }
+    }
+}

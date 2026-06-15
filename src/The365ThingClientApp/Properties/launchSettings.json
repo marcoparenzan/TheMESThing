@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "The365ThingClientApp": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:62192;http://localhost:62193"
+    }
+  }
+}

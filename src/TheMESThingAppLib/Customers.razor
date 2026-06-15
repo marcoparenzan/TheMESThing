@@ -1,0 +1,140 @@
+@page "/mes/customers"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Customers</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">🤝 Customers</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Customer</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Email</th><th>Country</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _items)
+                {
+                    <tr>
+                        <td><strong>@c.CustomerCode</strong></td>
+                        <td>@c.CustomerName</td>
+                        <td><span class="text-muted">@c.ContactEmail</span></td>
+                        <td><span class="text-muted">@c.Country</span></td>
+                        <td><span class="badge @(c.IsActive ? "badge-success" : "badge-danger")">@(c.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(c)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(c)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Customer" : "New Customer")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Code *</label><input @bind="_form.CustomerCode" /></div>
+                    <div class="form-group"><label>Name *</label><input @bind="_form.CustomerName" /></div>
+                    <div class="form-group"><label>Email</label><input @bind="_form.ContactEmail" /></div>
+                    <div class="form-group"><label>Phone</label><input @bind="_form.ContactPhone" /></div>
+                    <div class="form-group full-width"><label>Address</label><input @bind="_form.Address" /></div>
+                    <div class="form-group"><label>Country</label><input @bind="_form.Country" /></div>
+                    <div class="form-group"><label>Active</label><input type="checkbox" @bind="_form.IsActive" style="width:auto" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Customer</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.CustomerName</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<Customer>? _paged;
+    List<Customer> _items = [];
+    Customer? _deleteTarget;
+    CustomerForm _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetCustomersAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(Customer c)
+    {
+        _form = new() { Id = c.CustomerId, TenantId = c.TenantId, CustomerCode = c.CustomerCode, CustomerName = c.CustomerName, ContactEmail = c.ContactEmail, ContactPhone = c.ContactPhone, Address = c.Address, Country = c.Country, IsActive = c.IsActive };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(Customer c) => _deleteTarget = c;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var c = new Customer(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.CustomerCode, _form.CustomerName, _form.ContactEmail, _form.ContactPhone, _form.Address, _form.Country, null, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow, null, null);
+            if (_editing) await Api.UpdateCustomerAsync(_form.Id, c);
+            else await Api.CreateCustomerAsync(c);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteCustomerAsync(_deleteTarget!.CustomerId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class CustomerForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public string CustomerCode { get; set; } = "";
+        public string CustomerName { get; set; } = "";
+        public string? ContactEmail { get; set; }
+        public string? ContactPhone { get; set; }
+        public string? Address { get; set; }
+        public string? Country { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

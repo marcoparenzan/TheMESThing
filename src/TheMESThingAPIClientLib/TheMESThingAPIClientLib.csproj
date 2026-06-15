@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TheItemsThingLib\TheItemsThingLib.csproj" />
+    <ProjectReference Include="..\TheMESItemsThingLib\TheMESItemsThingLib.csproj" />
+    <ProjectReference Include="..\TheMESThingData\TheMESThingData.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Services\v1.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

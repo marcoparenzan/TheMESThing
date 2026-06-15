@@ -1,0 +1,142 @@
+@page "/mes/shifts"
+@rendermode InteractiveServer
+@inject MesThingApiClient Api
+
+<PageTitle>Shifts</PageTitle>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">🕐 Shifts</h2>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ New Shift</button>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loading) { <p class="loading">Loading…</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Start</th><th>End</th><th>Break (min)</th><th>Night</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _items)
+                {
+                    <tr>
+                        <td><strong>@s.ShiftCode</strong></td>
+                        <td>@s.ShiftName</td>
+                        <td>@s.StartTime.ToString("HH:mm")</td>
+                        <td>@s.EndTime.ToString("HH:mm")</td>
+                        <td>@s.BreakMinutes</td>
+                        <td>@(s.IsNightShift ? "🌙" : "—")</td>
+                        <td><span class="badge @(s.IsActive ? "badge-success" : "badge-danger")">@(s.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(s)">✏</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(s)">🗑</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <button disabled="@(!_paged?.HasPreviousPage ?? true)" @onclick="PrevPage">‹ Prev</button>
+            <span class="page-info">Page @_page of @(_paged?.TotalPages ?? 1)</span>
+            <button disabled="@(!_paged?.HasNextPage ?? true)" @onclick="NextPage">Next ›</button>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header"><span class="modal-title">@(_editing ? "Edit Shift" : "New Shift")</span><button class="btn-icon" @onclick="CloseModal">✕</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Code *</label><input @bind="_form.ShiftCode" /></div>
+                    <div class="form-group"><label>Name *</label><input @bind="_form.ShiftName" /></div>
+                    <div class="form-group"><label>Start Time *</label><input type="time" value="@_form.StartTime" @onchange="e => _form.StartTime = e.Value?.ToString() ?? _form.StartTime" /></div>
+                    <div class="form-group"><label>End Time *</label><input type="time" value="@_form.EndTime" @onchange="e => _form.EndTime = e.Value?.ToString() ?? _form.EndTime" /></div>
+                    <div class="form-group"><label>Break (min)</label><input type="number" @bind="_form.BreakMinutes" /></div>
+                    <div class="form-group"><label>Night Shift</label><input type="checkbox" @bind="_form.IsNightShift" style="width:auto" /></div>
+                    <div class="form-group"><label>Active</label><input type="checkbox" @bind="_form.IsActive" style="width:auto" /></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop"><div class="modal-dialog" style="min-width:360px">
+        <div class="modal-header"><span class="modal-title">Delete Shift</span></div>
+        <div class="modal-body"><p class="confirm-text">Delete <strong>@_deleteTarget.ShiftName</strong>?</p></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div></div>
+}
+
+@code {
+    bool _loading = true, _showModal, _editing;
+    string? _error;
+    int _page = 1;
+    PagedResult<Shift>? _paged;
+    List<Shift> _items = [];
+    Shift? _deleteTarget;
+    ShiftForm _form = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _loading = true; _error = null;
+        try { _paged = await Api.GetShiftsAsync(page: _page); _items = _paged.Items; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
+    void OpenEdit(Shift s)
+    {
+        _form = new() { Id = s.ShiftId, TenantId = s.TenantId, ShiftCode = s.ShiftCode, ShiftName = s.ShiftName, StartTime = s.StartTime.ToString("HH:mm"), EndTime = s.EndTime.ToString("HH:mm"), BreakMinutes = s.BreakMinutes, IsNightShift = s.IsNightShift, IsActive = s.IsActive };
+        _editing = true; _showModal = true;
+    }
+    void OpenDelete(Shift s) => _deleteTarget = s;
+    void CloseModal() => _showModal = false;
+
+    async Task Save()
+    {
+        try
+        {
+            var s = new Shift(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.ShiftCode, _form.ShiftName, TimeOnly.Parse(_form.StartTime), TimeOnly.Parse(_form.EndTime), _form.BreakMinutes, _form.IsNightShift, _form.IsActive, DateTime.UtcNow);
+            if (_editing) await Api.UpdateShiftAsync(_form.Id, s);
+            else await Api.CreateShiftAsync(s);
+            _showModal = false; await Load();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    async Task ConfirmDelete()
+    {
+        try { await Api.DeleteShiftAsync(_deleteTarget!.ShiftId); _deleteTarget = null; await Load(); }
+        catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
+    }
+
+    async Task PrevPage() { _page--; await Load(); }
+    async Task NextPage() { _page++; await Load(); }
+
+    class ShiftForm
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public string ShiftCode { get; set; } = "";
+        public string ShiftName { get; set; } = "";
+        public string StartTime { get; set; } = "06:00";
+        public string EndTime { get; set; } = "14:00";
+        public int BreakMinutes { get; set; } = 30;
+        public bool IsNightShift { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}
