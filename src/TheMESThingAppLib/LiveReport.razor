@@ -1,0 +1,244 @@
+@page "/mes/live"
+@rendermode InteractiveServer
+@using System.Diagnostics
+@using System.Globalization
+@using TheMESThingAPIClientLib.Proxies.Analytics
+@using TheMESThingAPIClientLib.Proxies.Iot
+@using TheMESThingAppLib.Simulation
+@implements IAsyncDisposable
+@inject MesThingApiClient Api
+@inject DeviceSimulator Sim
+@inject ITelemetryReadingsService Telemetry
+@inject IOeeCalculator Oee
+
+<PageTitle>Live report</PageTitle>
+
+<style>
+    .live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+    .live-tile { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: .6rem .8rem; }
+    .live-tile .label { font-size: .72rem; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+    .live-tile .value { font-size: 1.6rem; font-weight: 700; color: #1e2a3a; font-variant-numeric: tabular-nums; }
+    .live-tile .unit { font-size: .8rem; font-weight: 400; color: #64748b; margin-left: .2rem; }
+    .live-oee .value { color: #1d4ed8; }
+    .live-bar { height: 6px; background: #e2e8f0; border-radius: 3px; margin-top: .35rem; overflow: hidden; }
+    .live-bar > div { height: 100%; background: #3b82f6; transition: width .4s; }
+    .live-head { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; flex-wrap: wrap; }
+    .live-meta { font-size: .78rem; color: #64748b; }
+    .live-spark { width: 100%; height: 48px; }
+    .live-machines { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+</style>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">⚡ Live report</h2>
+        <span class="live-meta">Refresh every second · OEE computed by the API's Python plugin</span>
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+    @if (_loadingMachines) { <p class="loading">Loading machines…</p> }
+    else if (_machines.Count == 0) { <p class="loading">No machines found. Create a machine first, then start its simulator here.</p> }
+    else
+    {
+        <p class="live-meta">Simulated IoT devices (hosted in this app, posting readings to the API):</p>
+        <div class="live-machines">
+            @foreach (var m in _machines)
+            {
+                var running = Sim.IsRunning(m.Id);
+                <button class="btn btn-sm @(running ? "btn-danger" : "btn-primary")" @onclick="() => Toggle(m)">
+                    @(running ? "■ Stop" : "▶ Start") @m.Name
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@foreach (var s in _snapshots)
+{
+    _views.TryGetValue(s.MachineId, out var v);
+    <div class="card">
+        <div class="live-head">
+            <h3 class="card-title">@s.Name</h3>
+            <span class="badge @StateBadge(s.State)">@s.State</span>
+            <span class="live-meta">@s.ReadingsSent readings sent · last @(s.LastSentUtc?.ToLocalTime().ToString("HH:mm:ss") ?? "–")</span>
+            @if (s.LastError != null) { <span class="badge badge-danger">@s.LastError</span> }
+        </div>
+
+        @if (v is null) { <p class="loading">Waiting for the first readings…</p> }
+        else
+        {
+            <div class="live-grid">
+                <div class="live-tile"><div class="label">Temperature</div><div class="value">@Fmt(v.TemperatureC, "0.0")<span class="unit">°C</span></div></div>
+                <div class="live-tile"><div class="label">Line speed</div><div class="value">@Fmt(v.LineSpeed, "0.0")<span class="unit">m/min</span></div></div>
+                <div class="live-tile"><div class="label">Vibration</div><div class="value">@Fmt(v.Vibration, "0.00")<span class="unit">m/s²</span></div></div>
+                <div class="live-tile"><div class="label">Last cycle time</div><div class="value">@Fmt(v.CycleTime, "0.0")<span class="unit">s</span></div></div>
+            </div>
+
+            <div class="live-grid">
+                <div class="live-tile live-oee"><div class="label">Availability</div><div class="value">@Pct(v.Oee?.Availability)</div>@Bar(v.Oee?.Availability)</div>
+                <div class="live-tile live-oee"><div class="label">Performance</div><div class="value">@Pct(v.Oee?.Performance)</div>@Bar(v.Oee?.Performance)</div>
+                <div class="live-tile live-oee"><div class="label">Quality</div><div class="value">@Pct(v.Oee?.Quality)</div>@Bar(v.Oee?.Quality)</div>
+                <div class="live-tile live-oee"><div class="label">OEE</div><div class="value">@Pct(v.Oee?.Oee)</div>@Bar(v.Oee?.Oee)</div>
+            </div>
+
+            <div class="live-grid">
+                <div class="live-tile"><div class="label">Temperature (last @v.TemperatureHistory.Count s)</div>@Spark(v.TemperatureHistory, "#ef4444")</div>
+                <div class="live-tile"><div class="label">OEE (last @v.OeeHistory.Count s)</div>@Spark(v.OeeHistory, "#3b82f6")</div>
+            </div>
+
+            <p class="live-meta">
+                Window @s.PlannedSeconds s (max @DeviceSimulator.WindowSeconds) · operating @s.OperatingSeconds s · run @s.RunSeconds s ·
+                good @s.GoodQuantity / total @s.TotalQuantity ·
+                OEE call @(v.OeeMilliseconds.ToString("0")) ms
+                @if (v.OeeError != null) { <span class="badge badge-danger">@v.OeeError</span> }
+            </p>
+        }
+    </div>
+}
+
+@code {
+    sealed record MachineRef(Guid Id, string Name);
+
+    sealed class LiveView
+    {
+        public double? TemperatureC, LineSpeed, Vibration, CycleTime;
+        public OeeResult? Oee;
+        public string? OeeError;
+        public double OeeMilliseconds;
+        public List<double> TemperatureHistory = [];
+        public List<double> OeeHistory = [];
+
+        public LiveView Copy() => new()
+        {
+            TemperatureC = TemperatureC, LineSpeed = LineSpeed, Vibration = Vibration, CycleTime = CycleTime,
+            Oee = Oee, OeeError = OeeError, OeeMilliseconds = OeeMilliseconds,
+            TemperatureHistory = [.. TemperatureHistory], OeeHistory = [.. OeeHistory],
+        };
+    }
+
+    const int HistoryLength = 60;
+
+    List<MachineRef> _machines = [];
+    IReadOnlyList<DeviceSnapshot> _snapshots = [];
+    readonly Dictionary<Guid, LiveView> _views = new();
+    bool _loadingMachines = true;
+    string? _error;
+    CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var page = await Api.GetMachinesAsync(page: 1, pageSize: 100);
+            _machines = page.Items.Select(m => new MachineRef(m.MachineId.Value, m.MachineName.Value)).ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loadingMachines = false; }
+        _snapshots = Sim.Snapshots();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) return;
+        _cts = new CancellationTokenSource();
+        _ = RefreshLoopAsync(_cts.Token);
+    }
+
+    void Toggle(MachineRef m)
+    {
+        if (Sim.IsRunning(m.Id)) { Sim.Stop(m.Id); _views.Remove(m.Id); }
+        else Sim.Start(m.Id, m.Name);
+        _snapshots = Sim.Snapshots();
+    }
+
+    async Task RefreshLoopAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                var snapshots = Sim.Snapshots();
+                var previous = _views.ToDictionary(kv => kv.Key, kv => kv.Value);
+                var views = await Task.WhenAll(snapshots.Select(s => RefreshAsync(s, previous.GetValueOrDefault(s.MachineId), ct)));
+                // Views are immutable once published, so the renderer never sees a half-updated one.
+                await InvokeAsync(() =>
+                {
+                    _snapshots = snapshots;
+                    _views.Clear();
+                    for (var i = 0; i < snapshots.Count; i++) _views[snapshots[i].MachineId] = views[i];
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    async Task<LiveView> RefreshAsync(DeviceSnapshot s, LiveView? previous, CancellationToken ct)
+    {
+        var view = previous is null ? new LiveView() : previous.Copy();
+        try
+        {
+            var temperature = Telemetry.GetLatestAsync(s.MachineId, "Temperature", ct);
+            var speed = Telemetry.GetLatestAsync(s.MachineId, "LineSpeed", ct);
+            var vibration = Telemetry.GetLatestAsync(s.MachineId, "Vibration", ct);
+            var cycle = Telemetry.GetLatestAsync(s.MachineId, "CycleTime", ct);
+
+            var sw = Stopwatch.StartNew();
+            var oee = await Oee.CalculateAsync(new OeeInput(s.PlannedSeconds, s.OperatingSeconds, s.RunSeconds, s.GoodQuantity, s.TotalQuantity), ct);
+            view.OeeMilliseconds = sw.Elapsed.TotalMilliseconds;
+            view.Oee = oee.Result;
+            view.OeeError = oee.Error;
+
+            // Readings are stored in canonical units (K, m/min, m/s², s); show the temperature in °C.
+            if (await temperature is { } t)
+                view.TemperatureC = new TemperatureMeasure<double>(t.Value).In(TemperatureMeasureUnits.Celsius<double>());
+            view.LineSpeed = (await speed)?.Value ?? view.LineSpeed;
+            view.Vibration = (await vibration)?.Value ?? view.Vibration;
+            view.CycleTime = (await cycle)?.Value ?? view.CycleTime;
+
+            if (view.TemperatureC is { } c) Push(view.TemperatureHistory, c);
+            if (view.Oee?.Oee is { } o) Push(view.OeeHistory, o * 100);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { view.OeeError = ex.Message; }
+        return view;
+    }
+
+    static void Push(List<double> history, double value)
+    {
+        history.Add(value);
+        if (history.Count > HistoryLength) history.RemoveAt(0);
+    }
+
+    static string StateBadge(SimState state) => state switch
+    {
+        SimState.Running => "badge-success",
+        SimState.Idle => "badge-warning",
+        _ => "badge-danger",
+    };
+
+    static string Fmt(double? value, string format) => value?.ToString(format, CultureInfo.InvariantCulture) ?? "–";
+    static string Pct(double? ratio) => ratio is { } r ? (r * 100).ToString("0.0", CultureInfo.InvariantCulture) + " %" : "–";
+
+    static RenderFragment Bar(double? ratio) => builder =>
+    {
+        var width = ((ratio ?? 0) * 100).ToString("0.#", CultureInfo.InvariantCulture);
+        builder.AddMarkupContent(0, $"<div class=\"live-bar\"><div style=\"width:{width}%\"></div></div>");
+    };
+
+    static RenderFragment Spark(List<double> values, string color) => builder =>
+    {
+        if (values.Count < 2) return;
+        double min = values.Min(), max = values.Max(), span = Math.Max(max - min, 1e-9);
+        var points = string.Join(" ", values.Select((v, i) =>
+            $"{(i * 100.0 / (HistoryLength - 1)).ToString("0.##", CultureInfo.InvariantCulture)},{(46 - (v - min) / span * 44).ToString("0.##", CultureInfo.InvariantCulture)}"));
+        builder.AddMarkupContent(0,
+            $"<svg class=\"live-spark\" viewBox=\"0 0 100 48\" preserveAspectRatio=\"none\"><polyline fill=\"none\" stroke=\"{color}\" stroke-width=\"1.5\" vector-effect=\"non-scaling-stroke\" points=\"{points}\" /></svg>");
+    };
+
+    public ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}
