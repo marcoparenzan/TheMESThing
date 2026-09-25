@@ -1,0 +1,35 @@
+# Machine telemetry: typed readings with physical quantities. Fragment of mes.contract.yaml.
+
+scalars:
+  EventTimestamp:
+    base: datetime
+  IoTMessageId:
+    base: string
+    minLength: 1
+    maxLength: 100
+
+types:
+  MachineTemperatureReading:
+    kind: dto
+    attributes:
+      machineId: MachineId
+      value: TemperatureMeasure
+      recordedAt: EventTimestamp
+  MachineLineSpeedReading:
+    kind: dto
+    attributes:
+      machineId: MachineId
+      value: LineSpeedMeasure
+      recordedAt: EventTimestamp
+  MachineVibrationReading:
+    kind: dto
+    attributes:
+      machineId: MachineId
+      value: VibrationMeasure
+      recordedAt: EventTimestamp
+  MachineCycleTimeReading:
+    kind: dto
+    attributes:
+      machineId: MachineId
+      value: CycleTimeMeasure
+      recordedAt: EventTimestamp
