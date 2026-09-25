@@ -6,6 +6,7 @@ using The365ThingLib;
 using TheItemsThingLib;
 using TheMESThing.Contracts.Json;
 using TheMESThingAPI.Endpoints;
+using TheMESThingAPI.Python;
 using TheMESThingData;
 using TheMESItemsThingLib.Services;
 using TheMESThingLib.Services;
@@ -46,6 +47,8 @@ if (m365Config is not null)
     builder.Services.AddSingleton<IContactsService, M365ContactsService>();
     builder.Services.AddSingleton<IDriveService, M365DriveService>();
 }
+
+builder.Services.AddSingleton(new PythonPluginHost(Path.Combine(AppContext.BaseDirectory, "plugins")));
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -120,6 +123,7 @@ app.Use(async (ctx, next) =>
 app.MapMesEndpoints();
 app.MapIotEndpoints();
 app.MapTypedTelemetryEndpoints();
+app.MapPluginEndpoints();
 app.MapAnalyticsEndpoints();
 if (m365Config is not null)
     app.MapM365Endpoints();
