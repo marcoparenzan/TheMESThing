@@ -22,9 +22,9 @@
                         <td><strong>@p.ProductCode</strong></td>
                         <td>@p.ProductName</td>
                         <td><span class="badge badge-info">@p.UnitOfMeasure</span></td>
-                        <td>@p.CycleTimeSeconds?.ToString("N1")</td>
-                        <td>@p.SetupTimeSeconds?.ToString("N1")</td>
-                        <td><span class="badge @(p.IsActive ? "badge-success" : "badge-danger")">@(p.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>@p.CycleTimeSeconds?.Value.ToString("N1")</td>
+                        <td>@p.SetupTimeSeconds?.Value.ToString("N1")</td>
+                        <td><span class="badge @(p.IsActive.Value ? "badge-success" : "badge-danger")">@(p.IsActive.Value ? "Active" : "Inactive")</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(p)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(p)">🗑</button>
@@ -98,7 +98,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(Product p)
     {
-        _form = new() { Id = p.ProductId, TenantId = p.TenantId, ProductCode = p.ProductCode, ProductName = p.ProductName, UnitOfMeasure = p.UnitOfMeasure, CycleTimeSeconds = p.CycleTimeSeconds, SetupTimeSeconds = p.SetupTimeSeconds, IsActive = p.IsActive };
+        _form = new() { Id = p.ProductId.Value, TenantId = p.TenantId.Value, ProductCode = p.ProductCode.Value, ProductName = p.ProductName.Value, UnitOfMeasure = p.UnitOfMeasure.Value, CycleTimeSeconds = p.CycleTimeSeconds?.Value, SetupTimeSeconds = p.SetupTimeSeconds?.Value, IsActive = p.IsActive.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(Product p) => _deleteTarget = p;
@@ -108,7 +108,7 @@
     {
         try
         {
-            var p = new Product(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.ProductCode, _form.ProductName, _form.UnitOfMeasure, _form.CycleTimeSeconds, _form.SetupTimeSeconds, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow);
+            var p = new Product(new ProductId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), new ProductCode(_form.ProductCode), new ProductName(_form.ProductName), new UnitOfMeasure(_form.UnitOfMeasure), _form.CycleTimeSeconds is { } __v5 ? new DurationSeconds(__v5) : null, _form.SetupTimeSeconds is { } __v6 ? new DurationSeconds(__v6) : null, new ActiveFlag(_form.IsActive), new UtcTimestamp(DateTime.UtcNow), new UtcTimestamp(DateTime.UtcNow));
             if (_editing) await Api.UpdateProductAsync(_form.Id, p);
             else await Api.CreateProductAsync(p);
             _showModal = false; await Load();
@@ -118,7 +118,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteProductAsync(_deleteTarget!.ProductId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteProductAsync(_deleteTarget!.ProductId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

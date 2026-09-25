@@ -23,8 +23,8 @@
                         <td>@o.FirstName</td>
                         <td>@o.LastName</td>
                         <td><span class="text-muted">@o.BadgeNumber</span></td>
-                        <td><span class="text-muted">@o.HireDate?.ToString("yyyy-MM-dd")</span></td>
-                        <td><span class="badge @(o.IsActive ? "badge-success" : "badge-danger")">@(o.IsActive ? "Active" : "Inactive")</span></td>
+                        <td><span class="text-muted">@o.HireDate?.Value.ToString("yyyy-MM-dd")</span></td>
+                        <td><span class="badge @(o.IsActive.Value ? "badge-success" : "badge-danger")">@(o.IsActive.Value ? "Active" : "Inactive")</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(o)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(o)">🗑</button>
@@ -98,7 +98,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(Operator o)
     {
-        _form = new() { Id = o.OperatorId, TenantId = o.TenantId, OperatorCode = o.OperatorCode, FirstName = o.FirstName, LastName = o.LastName, BadgeNumber = o.BadgeNumber, HireDate = o.HireDate?.ToDateTime(TimeOnly.MinValue), IsActive = o.IsActive };
+        _form = new() { Id = o.OperatorId.Value, TenantId = o.TenantId.Value, OperatorCode = o.OperatorCode.Value, FirstName = o.FirstName.Value, LastName = o.LastName.Value, BadgeNumber = o.BadgeNumber?.Value, HireDate = o.HireDate?.Value.ToDateTime(TimeOnly.MinValue), IsActive = o.IsActive.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(Operator o) => _deleteTarget = o;
@@ -109,7 +109,7 @@
         try
         {
             var hire = _form.HireDate.HasValue ? DateOnly.FromDateTime(_form.HireDate.Value) : (DateOnly?)null;
-            var o = new Operator(_editing ? _form.Id : Guid.Empty, _form.TenantId, null, null, _form.OperatorCode, _form.FirstName, _form.LastName, _form.BadgeNumber, null, _form.IsActive, hire, DateTime.UtcNow, DateTime.UtcNow);
+            var o = new Operator(new OperatorId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), null, null, new OperatorCode(_form.OperatorCode), new PersonName(_form.FirstName), new PersonName(_form.LastName), _form.BadgeNumber is { } __v7 ? new BadgeNumber(__v7) : null, null, new ActiveFlag(_form.IsActive), hire is { } __v10 ? new HireDate(__v10) : null, new UtcTimestamp(DateTime.UtcNow), new UtcTimestamp(DateTime.UtcNow));
             if (_editing) await Api.UpdateOperatorAsync(_form.Id, o);
             else await Api.CreateOperatorAsync(o);
             _showModal = false; await Load();
@@ -119,7 +119,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteOperatorAsync(_deleteTarget!.OperatorId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteOperatorAsync(_deleteTarget!.OperatorId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

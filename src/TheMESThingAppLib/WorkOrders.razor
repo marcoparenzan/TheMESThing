@@ -21,11 +21,11 @@
                     <tr>
                         <td><strong>@w.WorkOrderNumber</strong></td>
                         <td><span class="text-muted">@w.Description</span></td>
-                        <td><span class="badge @StatusBadge(w.Status)">@w.Status</span></td>
+                        <td><span class="badge @StatusBadge(w.Status.Value)">@w.Status</span></td>
                         <td>@w.Priority</td>
-                        <td><span class="text-muted">@w.DueDate?.ToString("yyyy-MM-dd")</span></td>
-                        <td>@w.TotalQuantity.ToString("N0")</td>
-                        <td>@w.CompletedQuantity.ToString("N0")</td>
+                        <td><span class="text-muted">@w.DueDate?.Value.ToString("yyyy-MM-dd")</span></td>
+                        <td>@w.TotalQuantity.Value.ToString("N0")</td>
+                        <td>@w.CompletedQuantity.Value.ToString("N0")</td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(w)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(w)">🗑</button>
@@ -114,7 +114,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(WorkOrder w)
     {
-        _form = new() { Id = w.WorkOrderId, TenantId = w.TenantId, CustomerId = w.CustomerId, WorkOrderNumber = w.WorkOrderNumber, Description = w.Description, Status = w.Status, Priority = w.Priority, DueDate = w.DueDate?.ToDateTime(TimeOnly.MinValue), PlannedStartDate = w.PlannedStartDate?.ToDateTime(TimeOnly.MinValue), TotalQuantity = w.TotalQuantity };
+        _form = new() { Id = w.WorkOrderId.Value, TenantId = w.TenantId.Value, CustomerId = w.CustomerId.Value, WorkOrderNumber = w.WorkOrderNumber.Value, Description = w.Description?.Value, Status = w.Status.Value, Priority = w.Priority.Value, DueDate = w.DueDate?.Value.ToDateTime(TimeOnly.MinValue), PlannedStartDate = w.PlannedStartDate?.Value.ToDateTime(TimeOnly.MinValue), TotalQuantity = w.TotalQuantity.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(WorkOrder w) => _deleteTarget = w;
@@ -126,7 +126,7 @@
         {
             var due = _form.DueDate.HasValue ? DateOnly.FromDateTime(_form.DueDate.Value) : (DateOnly?)null;
             var start = _form.PlannedStartDate.HasValue ? DateOnly.FromDateTime(_form.PlannedStartDate.Value) : (DateOnly?)null;
-            var w = new WorkOrder(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.CustomerId, _form.WorkOrderNumber, _form.Description, _form.Status, _form.Priority, due, start, null, null, _form.TotalQuantity, 0, 0, null, null, DateTime.UtcNow, DateTime.UtcNow, null, null);
+            var w = new WorkOrder(new WorkOrderId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), new CustomerId(_form.CustomerId), new WorkOrderNumber(_form.WorkOrderNumber), _form.Description is { } __v4 ? new WorkOrderDescription(__v4) : null, new WorkOrderStatus(_form.Status), new WorkOrderPriority(_form.Priority), due is { } __v7 ? new CalendarDate(__v7) : null, start is { } __v8 ? new CalendarDate(__v8) : null, null, null, new Quantity(_form.TotalQuantity), new Quantity(0), new Quantity(0), null, null, new UtcTimestamp(DateTime.UtcNow), new UtcTimestamp(DateTime.UtcNow), null, null);
             if (_editing) await Api.UpdateWorkOrderAsync(_form.Id, w);
             else await Api.CreateWorkOrderAsync(w);
             _showModal = false; await Load();
@@ -136,7 +136,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteWorkOrderAsync(_deleteTarget!.WorkOrderId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteWorkOrderAsync(_deleteTarget!.WorkOrderId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

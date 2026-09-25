@@ -13,9 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- telemetry.contract.yaml is the compilation root; measures.yaml is an include.
-         Both are listed so that editing either triggers regeneration. -->
-    <AdditionalFiles Include="Contracts\telemetry.contract.yaml" />
+    <!-- mes.contract.yaml is the compilation root; the other files are includes.
+         All are listed so that editing any of them triggers regeneration. -->
+    <AdditionalFiles Include="Contracts\mes.contract.yaml" />
+    <AdditionalFiles Include="Contracts\mes.yaml" />
+    <AdditionalFiles Include="Contracts\telemetry.yaml" />
     <AdditionalFiles Include="Contracts\measures.yaml" />
   </ItemGroup>
 

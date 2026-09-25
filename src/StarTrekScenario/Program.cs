@@ -4,7 +4,7 @@
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
 using System.Net.Http.Headers;
-using TheMESThingAPIClientLib.Models.Mes;
+using TheMESThing.Contracts;
 using TheMESThingAPIClientLib.Services;
 
 // ── Configuration ─────────────────────────────────────────────────────────────

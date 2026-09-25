@@ -20,13 +20,13 @@
                 {
                     <tr>
                         <td><strong>@p.OrderNumber</strong></td>
-                        <td><span class="badge @StatusBadge(p.Status)">@p.Status</span></td>
+                        <td><span class="badge @StatusBadge(p.Status.Value)">@p.Status</span></td>
                         <td>@p.OperationSequence</td>
-                        <td>@p.PlannedQuantity.ToString("N0")</td>
-                        <td>@p.GoodQuantity.ToString("N0")</td>
-                        <td>@p.ScrapQuantity.ToString("N0")</td>
-                        <td><span class="text-muted">@p.PlannedStartAtUtc?.ToString("yyyy-MM-dd HH:mm")</span></td>
-                        <td><span class="text-muted">@p.PlannedEndAtUtc?.ToString("yyyy-MM-dd HH:mm")</span></td>
+                        <td>@p.PlannedQuantity.Value.ToString("N0")</td>
+                        <td>@p.GoodQuantity.Value.ToString("N0")</td>
+                        <td>@p.ScrapQuantity.Value.ToString("N0")</td>
+                        <td><span class="text-muted">@p.PlannedStartAtUtc?.Value.ToString("yyyy-MM-dd HH:mm")</span></td>
+                        <td><span class="text-muted">@p.PlannedEndAtUtc?.Value.ToString("yyyy-MM-dd HH:mm")</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(p)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(p)">🗑</button>
@@ -115,7 +115,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(ProductionOrder p)
     {
-        _form = new() { Id = p.ProductionOrderId, TenantId = p.TenantId, WorkOrderId = p.WorkOrderId, ProductId = p.ProductId, OrderNumber = p.OrderNumber, Status = p.Status, OperationSequence = p.OperationSequence, PlannedQuantity = p.PlannedQuantity, PlannedStartAtUtc = p.PlannedStartAtUtc, PlannedEndAtUtc = p.PlannedEndAtUtc, PlannedCycleTimeSeconds = p.PlannedCycleTimeSeconds };
+        _form = new() { Id = p.ProductionOrderId.Value, TenantId = p.TenantId.Value, WorkOrderId = p.WorkOrderId.Value, ProductId = p.ProductId.Value, OrderNumber = p.OrderNumber.Value, Status = p.Status.Value, OperationSequence = p.OperationSequence.Value, PlannedQuantity = p.PlannedQuantity.Value, PlannedStartAtUtc = p.PlannedStartAtUtc?.Value, PlannedEndAtUtc = p.PlannedEndAtUtc?.Value, PlannedCycleTimeSeconds = p.PlannedCycleTimeSeconds?.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(ProductionOrder p) => _deleteTarget = p;
@@ -125,7 +125,7 @@
     {
         try
         {
-            var p = new ProductionOrder(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.WorkOrderId, _form.ProductId, null, null, _form.OperationSequence, _form.OrderNumber, _form.Status, _form.PlannedQuantity, 0, 0, 0, _form.PlannedStartAtUtc, _form.PlannedEndAtUtc, null, null, _form.PlannedCycleTimeSeconds, null, DateTime.UtcNow, DateTime.UtcNow);
+            var p = new ProductionOrder(new ProductionOrderId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), new WorkOrderId(_form.WorkOrderId), new ProductId(_form.ProductId), null, null, new OperationSequence(_form.OperationSequence), new OrderNumber(_form.OrderNumber), new ProductionOrderStatus(_form.Status), new Quantity(_form.PlannedQuantity), new Quantity(0), new Quantity(0), new Quantity(0), _form.PlannedStartAtUtc is { } __v13 ? new UtcTimestamp(__v13) : null, _form.PlannedEndAtUtc is { } __v14 ? new UtcTimestamp(__v14) : null, null, null, _form.PlannedCycleTimeSeconds is { } __v17 ? new DurationSeconds(__v17) : null, null, new UtcTimestamp(DateTime.UtcNow), new UtcTimestamp(DateTime.UtcNow));
             if (_editing) await Api.UpdateProductionOrderAsync(_form.Id, p);
             else await Api.CreateProductionOrderAsync(p);
             _showModal = false; await Load();
@@ -135,7 +135,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteProductionOrderAsync(_deleteTarget!.ProductionOrderId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteProductionOrderAsync(_deleteTarget!.ProductionOrderId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

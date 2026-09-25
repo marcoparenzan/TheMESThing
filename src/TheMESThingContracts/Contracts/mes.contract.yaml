@@ -1,0 +1,7 @@
+context: ManufacturingExecution
+namespace: TheMESThing.Contracts
+
+includes:
+  - measures.yaml
+  - mes.yaml
+  - telemetry.yaml

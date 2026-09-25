@@ -3,7 +3,8 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using TheMESThingAPIClientLib.Models;
-using TheMESThingAPIClientLib.Models.Mes;
+using TheMESThing.Contracts;
+using TheMESThing.Contracts.Json;
 using TheMESThingAPIClientLib.Models.M365;
 
 namespace TheMESThingAPIClientLib.Services;
@@ -14,7 +15,8 @@ public class MesThingApiClient(HttpClient http)
     {
         PropertyNameCaseInsensitive = true,
         ReferenceHandler = ReferenceHandler.IgnoreCycles,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new ScalarJsonConverterFactory(), new QuantityJsonConverterFactory() }
     };
 
     // ── helpers ──────────────────────────────────────────────────────────────

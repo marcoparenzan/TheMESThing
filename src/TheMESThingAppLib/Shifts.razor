@@ -21,11 +21,11 @@
                     <tr>
                         <td><strong>@s.ShiftCode</strong></td>
                         <td>@s.ShiftName</td>
-                        <td>@s.StartTime.ToString("HH:mm")</td>
-                        <td>@s.EndTime.ToString("HH:mm")</td>
+                        <td>@s.StartTime.Value.ToString("HH:mm")</td>
+                        <td>@s.EndTime.Value.ToString("HH:mm")</td>
                         <td>@s.BreakMinutes</td>
-                        <td>@(s.IsNightShift ? "🌙" : "—")</td>
-                        <td><span class="badge @(s.IsActive ? "badge-success" : "badge-danger")">@(s.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>@(s.IsNightShift.Value ? "🌙" : "—")</td>
+                        <td><span class="badge @(s.IsActive.Value ? "badge-success" : "badge-danger")">@(s.IsActive.Value ? "Active" : "Inactive")</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(s)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(s)">🗑</button>
@@ -100,7 +100,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(Shift s)
     {
-        _form = new() { Id = s.ShiftId, TenantId = s.TenantId, ShiftCode = s.ShiftCode, ShiftName = s.ShiftName, StartTime = s.StartTime.ToString("HH:mm"), EndTime = s.EndTime.ToString("HH:mm"), BreakMinutes = s.BreakMinutes, IsNightShift = s.IsNightShift, IsActive = s.IsActive };
+        _form = new() { Id = s.ShiftId.Value, TenantId = s.TenantId.Value, ShiftCode = s.ShiftCode.Value, ShiftName = s.ShiftName.Value, StartTime = s.StartTime.Value.ToString("HH:mm"), EndTime = s.EndTime.Value.ToString("HH:mm"), BreakMinutes = s.BreakMinutes.Value, IsNightShift = s.IsNightShift.Value, IsActive = s.IsActive.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(Shift s) => _deleteTarget = s;
@@ -110,7 +110,7 @@
     {
         try
         {
-            var s = new Shift(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.ShiftCode, _form.ShiftName, TimeOnly.Parse(_form.StartTime), TimeOnly.Parse(_form.EndTime), _form.BreakMinutes, _form.IsNightShift, _form.IsActive, DateTime.UtcNow);
+            var s = new Shift(new ShiftId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), new ShiftCode(_form.ShiftCode), new ShiftName(_form.ShiftName), new ClockTime(TimeOnly.Parse(_form.StartTime)), new ClockTime(TimeOnly.Parse(_form.EndTime)), new BreakMinutes(_form.BreakMinutes), new NightShiftFlag(_form.IsNightShift), new ActiveFlag(_form.IsActive), new UtcTimestamp(DateTime.UtcNow));
             if (_editing) await Api.UpdateShiftAsync(_form.Id, s);
             else await Api.CreateShiftAsync(s);
             _showModal = false; await Load();
@@ -120,7 +120,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteShiftAsync(_deleteTarget!.ShiftId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteShiftAsync(_deleteTarget!.ShiftId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

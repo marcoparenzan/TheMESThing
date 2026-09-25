@@ -22,8 +22,8 @@
                         <td><strong>@d.DepartmentCode</strong></td>
                         <td>@d.DepartmentName</td>
                         <td><span class="text-muted">@d.CostCenter</span></td>
-                        <td><span class="badge @(d.IsActive ? "badge-success" : "badge-danger")">@(d.IsActive ? "Active" : "Inactive")</span></td>
-                        <td><span class="text-muted">@d.CreatedAtUtc.ToString("yyyy-MM-dd")</span></td>
+                        <td><span class="badge @(d.IsActive.Value ? "badge-success" : "badge-danger")">@(d.IsActive.Value ? "Active" : "Inactive")</span></td>
+                        <td><span class="text-muted">@d.CreatedAtUtc.Value.ToString("yyyy-MM-dd")</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(d)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(d)">🗑</button>
@@ -95,7 +95,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(Department d)
     {
-        _form = new() { Id = d.DepartmentId, TenantId = d.TenantId, DepartmentCode = d.DepartmentCode, DepartmentName = d.DepartmentName, CostCenter = d.CostCenter, IsActive = d.IsActive };
+        _form = new() { Id = d.DepartmentId.Value, TenantId = d.TenantId.Value, DepartmentCode = d.DepartmentCode.Value, DepartmentName = d.DepartmentName.Value, CostCenter = d.CostCenter?.Value, IsActive = d.IsActive.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(Department d) => _deleteTarget = d;
@@ -105,7 +105,7 @@
     {
         try
         {
-            var d = new Department(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.DepartmentCode, _form.DepartmentName, null, null, _form.CostCenter, null, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow);
+            var d = new Department(new DepartmentId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), new DepartmentCode(_form.DepartmentCode), new DepartmentName(_form.DepartmentName), null, null, _form.CostCenter is { } __v6 ? new CostCenter(__v6) : null, null, new ActiveFlag(_form.IsActive), new UtcTimestamp(DateTime.UtcNow), new UtcTimestamp(DateTime.UtcNow));
             if (_editing) await Api.UpdateDepartmentAsync(_form.Id, d);
             else await Api.CreateDepartmentAsync(d);
             _showModal = false; await Load();
@@ -115,7 +115,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteDepartmentAsync(_deleteTarget!.DepartmentId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteDepartmentAsync(_deleteTarget!.DepartmentId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

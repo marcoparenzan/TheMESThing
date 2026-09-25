@@ -94,13 +94,15 @@ if (app.Environment.IsDevelopment())
         options.AddPreferredSecuritySchemes("ApiKey");
         options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });
+
+    app.MapGet("/", () => Results.Redirect("/scalar/v1")).ExcludeFromDescription();
 }
 
 app.UseHttpsRedirection();
 
 app.Use(async (ctx, next) =>
 {
-    if (ctx.Request.Path.StartsWithSegments("/scalar") || ctx.Request.Path.StartsWithSegments("/openapi"))
+    if (ctx.Request.Path == "/" || ctx.Request.Path.StartsWithSegments("/scalar") || ctx.Request.Path.StartsWithSegments("/openapi"))
     {
         await next();
         return;

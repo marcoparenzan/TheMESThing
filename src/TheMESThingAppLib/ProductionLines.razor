@@ -22,9 +22,9 @@
                         <td><strong>@l.LineCode</strong></td>
                         <td>@l.LineName</td>
                         <td><span class="badge badge-info">@l.LineType</span></td>
-                        <td>@l.NominalCapacity?.ToString("N2")</td>
+                        <td>@l.NominalCapacity?.Value.ToString("N2")</td>
                         <td><span class="text-muted">@l.CapacityUnit</span></td>
-                        <td><span class="badge @(l.IsActive ? "badge-success" : "badge-danger")">@(l.IsActive ? "Active" : "Inactive")</span></td>
+                        <td><span class="badge @(l.IsActive.Value ? "badge-success" : "badge-danger")">@(l.IsActive.Value ? "Active" : "Inactive")</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(l)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(l)">🗑</button>
@@ -98,7 +98,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(ProductionLine l)
     {
-        _form = new() { Id = l.ProductionLineId, TenantId = l.TenantId, DepartmentId = l.DepartmentId, LineCode = l.LineCode, LineName = l.LineName, LineType = l.LineType, NominalCapacity = l.NominalCapacity, CapacityUnit = l.CapacityUnit, IsActive = l.IsActive };
+        _form = new() { Id = l.ProductionLineId.Value, TenantId = l.TenantId.Value, DepartmentId = l.DepartmentId.Value, LineCode = l.LineCode.Value, LineName = l.LineName.Value, LineType = l.LineType.Value, NominalCapacity = l.NominalCapacity?.Value, CapacityUnit = l.CapacityUnit?.Value, IsActive = l.IsActive.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(ProductionLine l) => _deleteTarget = l;
@@ -108,7 +108,7 @@
     {
         try
         {
-            var l = new ProductionLine(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.DepartmentId, _form.LineCode, _form.LineName, _form.LineType, _form.NominalCapacity, _form.CapacityUnit, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow);
+            var l = new ProductionLine(new ProductionLineId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), new DepartmentId(_form.DepartmentId), new LineCode(_form.LineCode), new LineName(_form.LineName), new LineType(_form.LineType), _form.NominalCapacity is { } __v6 ? new NominalCapacity(__v6) : null, _form.CapacityUnit is { } __v7 ? new CapacityUnit(__v7) : null, new ActiveFlag(_form.IsActive), new UtcTimestamp(DateTime.UtcNow), new UtcTimestamp(DateTime.UtcNow));
             if (_editing) await Api.UpdateProductionLineAsync(_form.Id, l);
             else await Api.CreateProductionLineAsync(l);
             _showModal = false; await Load();
@@ -118,7 +118,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteProductionLineAsync(_deleteTarget!.ProductionLineId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteProductionLineAsync(_deleteTarget!.ProductionLineId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

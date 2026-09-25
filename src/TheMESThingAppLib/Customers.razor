@@ -23,7 +23,7 @@
                         <td>@c.CustomerName</td>
                         <td><span class="text-muted">@c.ContactEmail</span></td>
                         <td><span class="text-muted">@c.Country</span></td>
-                        <td><span class="badge @(c.IsActive ? "badge-success" : "badge-danger")">@(c.IsActive ? "Active" : "Inactive")</span></td>
+                        <td><span class="badge @(c.IsActive.Value ? "badge-success" : "badge-danger")">@(c.IsActive.Value ? "Active" : "Inactive")</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(c)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(c)">🗑</button>
@@ -98,7 +98,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(Customer c)
     {
-        _form = new() { Id = c.CustomerId, TenantId = c.TenantId, CustomerCode = c.CustomerCode, CustomerName = c.CustomerName, ContactEmail = c.ContactEmail, ContactPhone = c.ContactPhone, Address = c.Address, Country = c.Country, IsActive = c.IsActive };
+        _form = new() { Id = c.CustomerId.Value, TenantId = c.TenantId.Value, CustomerCode = c.CustomerCode.Value, CustomerName = c.CustomerName.Value, ContactEmail = c.ContactEmail?.Value, ContactPhone = c.ContactPhone?.Value, Address = c.Address?.Value, Country = c.Country?.Value, IsActive = c.IsActive.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(Customer c) => _deleteTarget = c;
@@ -108,7 +108,7 @@
     {
         try
         {
-            var c = new Customer(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.CustomerCode, _form.CustomerName, _form.ContactEmail, _form.ContactPhone, _form.Address, _form.Country, null, _form.IsActive, DateTime.UtcNow, DateTime.UtcNow, null, null);
+            var c = new Customer(new CustomerId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), new CustomerCode(_form.CustomerCode), new CustomerName(_form.CustomerName), _form.ContactEmail is { } __v4 ? new ContactEmail(__v4) : null, _form.ContactPhone is { } __v5 ? new ContactPhone(__v5) : null, _form.Address is { } __v6 ? new PostalAddress(__v6) : null, _form.Country is { } __v7 ? new CountryName(__v7) : null, null, new ActiveFlag(_form.IsActive), new UtcTimestamp(DateTime.UtcNow), new UtcTimestamp(DateTime.UtcNow), null, null);
             if (_editing) await Api.UpdateCustomerAsync(_form.Id, c);
             else await Api.CreateCustomerAsync(c);
             _showModal = false; await Load();
@@ -118,7 +118,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteCustomerAsync(_deleteTarget!.CustomerId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteCustomerAsync(_deleteTarget!.CustomerId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

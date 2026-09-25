@@ -23,7 +23,7 @@
                         <td>@s.SkillName</td>
                         <td><span class="badge badge-info">@s.Category</span></td>
                         <td><span class="text-muted">@s.Description</span></td>
-                        <td><span class="badge @(s.IsActive ? "badge-success" : "badge-danger")">@(s.IsActive ? "Active" : "Inactive")</span></td>
+                        <td><span class="badge @(s.IsActive.Value ? "badge-success" : "badge-danger")">@(s.IsActive.Value ? "Active" : "Inactive")</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(s)">✏</button>
                             <button class="btn btn-sm btn-danger" @onclick="() => OpenDelete(s)">🗑</button>
@@ -96,7 +96,7 @@
     void OpenCreate() { _form = new(); _editing = false; _showModal = true; }
     void OpenEdit(Skill s)
     {
-        _form = new() { Id = s.SkillId, TenantId = s.TenantId, SkillCode = s.SkillCode, SkillName = s.SkillName, Category = s.Category, Description = s.Description, IsActive = s.IsActive };
+        _form = new() { Id = s.SkillId.Value, TenantId = s.TenantId.Value, SkillCode = s.SkillCode.Value, SkillName = s.SkillName.Value, Category = s.Category?.Value, Description = s.Description?.Value, IsActive = s.IsActive.Value };
         _editing = true; _showModal = true;
     }
     void OpenDelete(Skill s) => _deleteTarget = s;
@@ -106,7 +106,7 @@
     {
         try
         {
-            var s = new Skill(_editing ? _form.Id : Guid.Empty, _form.TenantId, _form.SkillCode, _form.SkillName, _form.Category, _form.Description, _form.IsActive, DateTime.UtcNow);
+            var s = new Skill(new SkillId(_editing ? _form.Id : Guid.Empty), new TenantId(_form.TenantId), new SkillCode(_form.SkillCode), new SkillName(_form.SkillName), _form.Category is { } __v4 ? new SkillCategory(__v4) : null, _form.Description is { } __v5 ? new SkillDescription(__v5) : null, new ActiveFlag(_form.IsActive), new UtcTimestamp(DateTime.UtcNow));
             if (_editing) await Api.UpdateSkillAsync(_form.Id, s);
             else await Api.CreateSkillAsync(s);
             _showModal = false; await Load();
@@ -116,7 +116,7 @@
 
     async Task ConfirmDelete()
     {
-        try { await Api.DeleteSkillAsync(_deleteTarget!.SkillId); _deleteTarget = null; await Load(); }
+        try { await Api.DeleteSkillAsync(_deleteTarget!.SkillId.Value); _deleteTarget = null; await Load(); }
         catch (Exception ex) { _error = ex.Message; _deleteTarget = null; }
     }
 

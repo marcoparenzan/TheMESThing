@@ -1,0 +1,374 @@
+# MES domain: the business objects exchanged between API and clients.
+# Optional attributes mirror the nullable columns of the persistence entities.
+
+scalars:
+  TenantId:
+    base: guid
+  UserId:
+    base: guid
+  CustomerId:
+    base: guid
+  DepartmentId:
+    base: guid
+  ProductionLineId:
+    base: guid
+  MachineId:
+    base: guid
+  SkillId:
+    base: guid
+  MachineSkillId:
+    base: guid
+  OperatorId:
+    base: guid
+  OperatorSkillId:
+    base: guid
+  ShiftId:
+    base: guid
+  ProductId:
+    base: guid
+  WorkOrderId:
+    base: guid
+  ProductionOrderId:
+    base: guid
+  CustomerCode:
+    base: string
+    maxLength: 50
+  CustomerName:
+    base: string
+    maxLength: 300
+  ContactEmail:
+    base: string
+    maxLength: 300
+  ContactPhone:
+    base: string
+    maxLength: 50
+  PostalAddress:
+    base: string
+    maxLength: 500
+  CountryName:
+    base: string
+    maxLength: 100
+  ExternalMicrosoft365Id:
+    base: string
+    maxLength: 200
+  DepartmentCode:
+    base: string
+    maxLength: 50
+  DepartmentName:
+    base: string
+    maxLength: 200
+  CostCenter:
+    base: string
+    maxLength: 50
+  LineCode:
+    base: string
+    maxLength: 50
+  LineName:
+    base: string
+    maxLength: 200
+  LineType:
+    base: string
+    maxLength: 50
+  CapacityUnit:
+    base: string
+    maxLength: 50
+  MachineCode:
+    base: string
+    maxLength: 50
+  MachineName:
+    base: string
+    maxLength: 200
+  MachineType:
+    base: string
+    maxLength: 100
+  Manufacturer:
+    base: string
+    maxLength: 200
+  MachineModel:
+    base: string
+    maxLength: 200
+  SerialNumber:
+    base: string
+    maxLength: 100
+  IoTDeviceId:
+    base: string
+    maxLength: 200
+  IoTHubConnectionState:
+    base: string
+    maxLength: 50
+  MachineStatus:
+    base: string
+    maxLength: 50
+  SkillCode:
+    base: string
+    maxLength: 50
+  SkillName:
+    base: string
+    maxLength: 200
+  SkillCategory:
+    base: string
+    maxLength: 100
+  SkillDescription:
+    base: string
+    maxLength: 500
+  OperatorCode:
+    base: string
+    maxLength: 50
+  PersonName:
+    base: string
+    maxLength: 150
+  BadgeNumber:
+    base: string
+    maxLength: 50
+  ShiftCode:
+    base: string
+    maxLength: 50
+  ShiftName:
+    base: string
+    maxLength: 200
+  ProductCode:
+    base: string
+    maxLength: 50
+  ProductName:
+    base: string
+    maxLength: 300
+  UnitOfMeasure:
+    base: string
+    maxLength: 20
+  WorkOrderNumber:
+    base: string
+    maxLength: 50
+  WorkOrderDescription:
+    base: string
+    maxLength: 500
+  WorkOrderStatus:
+    base: string
+    maxLength: 50
+  TeamsChannelId:
+    base: string
+    maxLength: 200
+  OrderNumber:
+    base: string
+    maxLength: 50
+  ProductionOrderStatus:
+    base: string
+    maxLength: 50
+  NominalCapacity:
+    base: double
+  CapacityPerHour:
+    base: double
+  DurationSeconds:
+    base: double
+  Quantity:
+    base: double
+  InstallationDate:
+    base: date
+  HireDate:
+    base: date
+  CalendarDate:
+    base: date
+  ClockTime:
+    base: time
+  UtcTimestamp:
+    base: datetime
+  ProficiencyLevel:
+    base: byte
+  WorkOrderPriority:
+    base: byte
+  BreakMinutes:
+    base: int
+  OperationSequence:
+    base: int
+  ActiveFlag:
+    base: bool
+  RequiredFlag:
+    base: bool
+  NightShiftFlag:
+    base: bool
+
+types:
+  Customer:
+    kind: model
+    attributes:
+      customerId: CustomerId
+      tenantId: TenantId
+      customerCode: CustomerCode
+      customerName: CustomerName
+      contactEmail: optional<ContactEmail>
+      contactPhone: optional<ContactPhone>
+      address: optional<PostalAddress>
+      country: optional<CountryName>
+      externalMicrosoft365Id: optional<ExternalMicrosoft365Id>
+      isActive: ActiveFlag
+      createdAtUtc: UtcTimestamp
+      updatedAtUtc: UtcTimestamp
+      createdByUserId: optional<UserId>
+      updatedByUserId: optional<UserId>
+  Department:
+    kind: model
+    attributes:
+      departmentId: DepartmentId
+      tenantId: TenantId
+      departmentCode: DepartmentCode
+      departmentName: DepartmentName
+      parentDepartmentId: optional<DepartmentId>
+      managerUserId: optional<UserId>
+      costCenter: optional<CostCenter>
+      externalMicrosoft365Id: optional<ExternalMicrosoft365Id>
+      isActive: ActiveFlag
+      createdAtUtc: UtcTimestamp
+      updatedAtUtc: UtcTimestamp
+  ProductionLine:
+    kind: model
+    attributes:
+      productionLineId: ProductionLineId
+      tenantId: TenantId
+      departmentId: DepartmentId
+      lineCode: LineCode
+      lineName: LineName
+      lineType: LineType
+      nominalCapacity: optional<NominalCapacity>
+      capacityUnit: optional<CapacityUnit>
+      isActive: ActiveFlag
+      createdAtUtc: UtcTimestamp
+      updatedAtUtc: UtcTimestamp
+  Machine:
+    kind: model
+    attributes:
+      machineId: MachineId
+      tenantId: TenantId
+      departmentId: DepartmentId
+      productionLineId: optional<ProductionLineId>
+      machineCode: MachineCode
+      machineName: MachineName
+      machineType: MachineType
+      manufacturer: optional<Manufacturer>
+      model: optional<MachineModel>
+      serialNumber: optional<SerialNumber>
+      installationDate: optional<InstallationDate>
+      nominalCycleTimeSeconds: optional<DurationSeconds>
+      nominalCapacityPerHour: optional<CapacityPerHour>
+      ioTDeviceId: optional<IoTDeviceId>
+      ioTHubConnectionState: optional<IoTHubConnectionState>
+      currentStatus: MachineStatus
+      lastStatusChangedAtUtc: optional<UtcTimestamp>
+      externalMicrosoft365Id: optional<ExternalMicrosoft365Id>
+      isActive: ActiveFlag
+      createdAtUtc: UtcTimestamp
+      updatedAtUtc: UtcTimestamp
+  Skill:
+    kind: model
+    attributes:
+      skillId: SkillId
+      tenantId: TenantId
+      skillCode: SkillCode
+      skillName: SkillName
+      category: optional<SkillCategory>
+      description: optional<SkillDescription>
+      isActive: ActiveFlag
+      createdAtUtc: UtcTimestamp
+  MachineSkill:
+    kind: model
+    attributes:
+      machineSkillId: MachineSkillId
+      machineId: MachineId
+      skillId: SkillId
+      isRequired: RequiredFlag
+  Operator:
+    kind: model
+    attributes:
+      operatorId: OperatorId
+      tenantId: TenantId
+      appUserId: optional<UserId>
+      departmentId: optional<DepartmentId>
+      operatorCode: OperatorCode
+      firstName: PersonName
+      lastName: PersonName
+      badgeNumber: optional<BadgeNumber>
+      externalMicrosoft365Id: optional<ExternalMicrosoft365Id>
+      isActive: ActiveFlag
+      hireDate: optional<HireDate>
+      createdAtUtc: UtcTimestamp
+      updatedAtUtc: UtcTimestamp
+  OperatorSkill:
+    kind: model
+    attributes:
+      operatorSkillId: OperatorSkillId
+      operatorId: OperatorId
+      skillId: SkillId
+      proficiencyLevel: ProficiencyLevel
+      certifiedAtUtc: optional<UtcTimestamp>
+      expiresAtUtc: optional<UtcTimestamp>
+  Shift:
+    kind: model
+    attributes:
+      shiftId: ShiftId
+      tenantId: TenantId
+      shiftCode: ShiftCode
+      shiftName: ShiftName
+      startTime: ClockTime
+      endTime: ClockTime
+      breakMinutes: BreakMinutes
+      isNightShift: NightShiftFlag
+      isActive: ActiveFlag
+      createdAtUtc: UtcTimestamp
+  Product:
+    kind: model
+    attributes:
+      productId: ProductId
+      tenantId: TenantId
+      productCode: ProductCode
+      productName: ProductName
+      unitOfMeasure: UnitOfMeasure
+      cycleTimeSeconds: optional<DurationSeconds>
+      setupTimeSeconds: optional<DurationSeconds>
+      isActive: ActiveFlag
+      createdAtUtc: UtcTimestamp
+      updatedAtUtc: UtcTimestamp
+  WorkOrder:
+    kind: model
+    attributes:
+      workOrderId: WorkOrderId
+      tenantId: TenantId
+      customerId: CustomerId
+      workOrderNumber: WorkOrderNumber
+      description: optional<WorkOrderDescription>
+      status: WorkOrderStatus
+      priority: WorkOrderPriority
+      dueDate: optional<CalendarDate>
+      plannedStartDate: optional<CalendarDate>
+      actualStartDate: optional<CalendarDate>
+      actualEndDate: optional<CalendarDate>
+      totalQuantity: Quantity
+      completedQuantity: Quantity
+      rejectedQuantity: Quantity
+      externalMicrosoft365Id: optional<ExternalMicrosoft365Id>
+      teamsChannelId: optional<TeamsChannelId>
+      createdAtUtc: UtcTimestamp
+      updatedAtUtc: UtcTimestamp
+      createdByUserId: optional<UserId>
+      updatedByUserId: optional<UserId>
+  ProductionOrder:
+    kind: model
+    attributes:
+      productionOrderId: ProductionOrderId
+      tenantId: TenantId
+      workOrderId: WorkOrderId
+      productId: ProductId
+      machineId: optional<MachineId>
+      productionLineId: optional<ProductionLineId>
+      operationSequence: OperationSequence
+      orderNumber: OrderNumber
+      status: ProductionOrderStatus
+      plannedQuantity: Quantity
+      goodQuantity: Quantity
+      scrapQuantity: Quantity
+      reworkQuantity: Quantity
+      plannedStartAtUtc: optional<UtcTimestamp>
+      plannedEndAtUtc: optional<UtcTimestamp>
+      actualStartAtUtc: optional<UtcTimestamp>
+      actualEndAtUtc: optional<UtcTimestamp>
+      plannedCycleTimeSeconds: optional<DurationSeconds>
+      actualCycleTimeSeconds: optional<DurationSeconds>
+      createdAtUtc: UtcTimestamp
+      updatedAtUtc: UtcTimestamp
