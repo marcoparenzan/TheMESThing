@@ -14,6 +14,7 @@ units:
 
 quantities:
   TemperatureMeasure: { dimension: Temperature, canonicalUnit: Kelvin, units: [Celsius] }
+  DurationMeasure: { dimension: Time, canonicalUnit: Second, units: [Minute] }
   CycleTimeMeasure: { dimension: Time, canonicalUnit: Second, units: [Minute] }
   LineSpeedMeasure: { dimension: Speed, canonicalUnit: MetrePerMinute }
   VibrationMeasure: { dimension: Acceleration, canonicalUnit: MetrePerSecondSquared }

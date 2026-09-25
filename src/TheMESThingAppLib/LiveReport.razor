@@ -2,14 +2,12 @@
 @rendermode InteractiveServer
 @using System.Diagnostics
 @using System.Globalization
-@using TheMESThingAPIClientLib.Proxies.Analytics
 @using TheMESThingAPIClientLib.Proxies.Iot
 @using TheMESThingAppLib.Simulation
 @implements IAsyncDisposable
 @inject MesThingApiClient Api
 @inject DeviceSimulator Sim
 @inject ITelemetryReadingsService Telemetry
-@inject IOeeCalculator Oee
 
 <PageTitle>Live report</PageTitle>
 
@@ -31,7 +29,7 @@
 <div class="card">
     <div class="card-header">
         <h2 class="card-title">⚡ Live report</h2>
-        <span class="live-meta">Refresh every second · OEE computed by the API's Python plugin</span>
+        <span class="live-meta">Refresh every second · OEE computed by the API's Python plugin on the production counters sent by the device</span>
     </div>
     @if (_error != null) { <div class="alert alert-danger">@_error</div> }
     @if (_loadingMachines) { <p class="loading">Loading machines…</p> }
@@ -80,14 +78,22 @@
             </div>
 
             <div class="live-grid">
+                <div class="live-tile"><div class="label">Planned production time</div><div class="value">@Secs(v.Oee?.PlannedProductionTimeSeconds)</div></div>
+                <div class="live-tile"><div class="label">Operating time</div><div class="value">@Secs(v.Oee?.OperatingTimeSeconds)</div></div>
+                <div class="live-tile"><div class="label">Runtime</div><div class="value">@Secs(v.Oee?.RunTimeSeconds)</div></div>
+                <div class="live-tile"><div class="label">Total quantity</div><div class="value">@Fmt(v.Oee?.TotalQuantity, "0")<span class="unit">pcs</span></div></div>
+                <div class="live-tile"><div class="label">Good quantity</div><div class="value">@Fmt(v.Oee?.GoodQuantity, "0")<span class="unit">pcs</span></div></div>
+                <div class="live-tile"><div class="label">Reference period</div><div class="value" style="font-size:1.1rem">@(v.Oee?.PeriodType ?? "–")</div></div>
+            </div>
+
+            <div class="live-grid">
                 <div class="live-tile"><div class="label">Temperature (last @v.TemperatureHistory.Count s)</div>@Spark(v.TemperatureHistory, "#ef4444")</div>
                 <div class="live-tile"><div class="label">OEE (last @v.OeeHistory.Count s)</div>@Spark(v.OeeHistory, "#3b82f6")</div>
             </div>
 
             <p class="live-meta">
-                Window @s.PlannedSeconds s (max @DeviceSimulator.WindowSeconds) · operating @s.OperatingSeconds s · run @s.RunSeconds s ·
-                good @s.GoodQuantity / total @s.TotalQuantity ·
-                OEE call @(v.OeeMilliseconds.ToString("0")) ms
+                Counters computed at @(v.Oee?.CalculatedAtUtc.ToLocalTime().ToString("HH:mm:ss") ?? "–") ·
+                OEE read @(v.OeeMilliseconds.ToString("0")) ms
                 @if (v.OeeError != null) { <span class="badge badge-danger">@v.OeeError</span> }
             </p>
         }
@@ -100,7 +106,7 @@
     sealed class LiveView
     {
         public double? TemperatureC, LineSpeed, Vibration, CycleTime;
-        public OeeResult? Oee;
+        public LatestOee? Oee;
         public string? OeeError;
         public double OeeMilliseconds;
         public List<double> TemperatureHistory = [];
@@ -182,11 +188,11 @@
             var vibration = Telemetry.GetLatestAsync(s.MachineId, "Vibration", ct);
             var cycle = Telemetry.GetLatestAsync(s.MachineId, "CycleTime", ct);
 
+            // The OEE was computed by the API (Python plugin) when the device's counters were ingested.
             var sw = Stopwatch.StartNew();
-            var oee = await Oee.CalculateAsync(new OeeInput(s.PlannedSeconds, s.OperatingSeconds, s.RunSeconds, s.GoodQuantity, s.TotalQuantity), ct);
+            view.Oee = await Telemetry.GetLatestOeeAsync(s.MachineId, ct) ?? view.Oee;
             view.OeeMilliseconds = sw.Elapsed.TotalMilliseconds;
-            view.Oee = oee.Result;
-            view.OeeError = oee.Error;
+            view.OeeError = null;
 
             // Readings are stored in canonical units (K, m/min, m/s², s); show the temperature in °C.
             if (await temperature is { } t)
@@ -217,6 +223,7 @@
     };
 
     static string Fmt(double? value, string format) => value?.ToString(format, CultureInfo.InvariantCulture) ?? "–";
+    static string Secs(long? seconds) => seconds is { } v ? TimeSpan.FromSeconds(v).ToString(v >= 3600 ? @"h\:mm\:ss" : @"m\:ss") : "–";
     static string Pct(double? ratio) => ratio is { } r ? (r * 100).ToString("0.0", CultureInfo.InvariantCulture) + " %" : "–";
 
     static RenderFragment Bar(double? ratio) => builder =>

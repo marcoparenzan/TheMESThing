@@ -139,7 +139,7 @@ public static class AnalyticsEndpoints
             if (from.HasValue) q = q.Where(o => o.PeriodDate >= from.Value);
             if (to.HasValue) q = q.Where(o => o.PeriodDate <= to.Value);
             var total = await q.CountAsync();
-            var items = await q.OrderByDescending(o => o.PeriodDate)
+            var items = await q.OrderByDescending(o => o.PeriodDate).ThenByDescending(o => o.OeeCalculationId)
                 .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
             return new PagedResult<OeeCalculation>(items, page, pageSize, total);
         })

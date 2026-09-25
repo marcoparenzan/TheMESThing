@@ -8,6 +8,14 @@ scalars:
     minLength: 1
     maxLength: 100
 
+  PieceCount:
+    base: double
+    min: 0
+  ReferencePeriodType:
+    base: string
+    minLength: 1
+    maxLength: 50
+
 types:
   MachineTemperatureReading:
     kind: dto
@@ -33,3 +41,21 @@ types:
       machineId: MachineId
       value: CycleTimeMeasure
       recordedAt: EventTimestamp
+  MachineProductionCounters:
+    kind: dto
+    attributes:
+      machineId: MachineId
+      periodType: ReferencePeriodType
+      periodEnd: EventTimestamp
+      plannedProductionTime: DurationMeasure
+      operatingTime: DurationMeasure
+      runTime: DurationMeasure
+      plannedQuantity: PieceCount
+      totalQuantity: PieceCount
+      goodQuantity: PieceCount
+  MachineStatusReport:
+    kind: dto
+    attributes:
+      machineId: MachineId
+      status: MachineStatus
+      reportedAt: EventTimestamp

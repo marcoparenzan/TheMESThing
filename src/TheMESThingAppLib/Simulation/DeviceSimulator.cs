@@ -15,7 +15,8 @@ public sealed record DeviceSnapshot(
 /// <summary>
 /// An IoT device simulator hosted in the front-end process. Every second each started device advances its
 /// state machine and posts temperature, line speed, vibration (and a cycle time whenever a cycle completes)
-/// to the API as typed Ontly readings. Shared by all circuits: a device keeps running when a page is closed.
+/// plus the production counters that feed the OEE (planned/operating/run time, total/good quantity, reference
+/// period) to the API as typed Ontly readings. Shared by all circuits: a device keeps running when a page is closed.
 /// </summary>
 public sealed class DeviceSimulator(IServiceScopeFactory scopes) : IAsyncDisposable
 {
@@ -53,10 +54,23 @@ public sealed class DeviceSimulator(IServiceScopeFactory scopes) : IAsyncDisposa
         CancellationTokenSource? cts = null;
         lock (_lock)
         {
-            _devices.Remove(machineId);
+            if (!_devices.Remove(machineId)) return;
+            _ = ReportOfflineAsync(machineId);
             if (_devices.Count == 0) { cts = _cts; _cts = null; _loop = null; }
         }
         cts?.Cancel();
+    }
+
+    /// <summary>A stopped device tells the API it is offline, so its status no longer shows the last simulated state.</summary>
+    private async Task ReportOfflineAsync(Guid machineId)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var api = scope.ServiceProvider.GetRequiredService<ITelemetryReadingsService>();
+            await api.ReportStatusAsync(new MachineStatusReport(new MachineId(machineId), new MachineStatus("Offline"), new EventTimestamp(DateTime.UtcNow)));
+        }
+        catch { /* best effort: the API also derives Offline from missing telemetry */ }
     }
 
     private async Task RunAsync(CancellationToken ct)
@@ -94,6 +108,20 @@ public sealed class DeviceSimulator(IServiceScopeFactory scopes) : IAsyncDisposa
             if (tick.CompletedCycleSeconds is { } cycle)
                 posts.Add(api.IngestAsync(new MachineCycleTimeReading(machine, new CycleTimeMeasure<double>(cycle), now), ct));
 
+            // Production counters over the rolling reference period: the inputs of the OEE calculation.
+            var counters = device.Snapshot();
+            posts.Add(api.IngestAsync(new MachineProductionCounters(machine,
+                new ReferencePeriodType($"Rolling{WindowSeconds}s"), now,
+                new DurationMeasure<double>(counters.PlannedSeconds),
+                new DurationMeasure<double>(counters.OperatingSeconds),
+                new DurationMeasure<double>(counters.RunSeconds),
+                new PieceCount(counters.PlannedSeconds / SimulatedDevice.IdealCycleSeconds),
+                new PieceCount(counters.TotalQuantity),
+                new PieceCount(counters.GoodQuantity)), ct));
+
+            if (counters.State != device.ReportedState)
+                posts.Add(ReportStatusAsync(api, device, machine, counters.State, now, ct));
+
             var results = await Task.WhenAll(posts);
             device.RecordSent(results.Count(ok => ok), results.Any(ok => !ok) ? "Machine not found on the API." : null);
         }
@@ -102,6 +130,13 @@ public sealed class DeviceSimulator(IServiceScopeFactory scopes) : IAsyncDisposa
         {
             device.RecordSent(0, ex.Message);
         }
+    }
+
+    private static async Task<bool> ReportStatusAsync(ITelemetryReadingsService api, SimulatedDevice device, MachineId machine, SimState state, EventTimestamp at, CancellationToken ct)
+    {
+        var ok = await api.ReportStatusAsync(new MachineStatusReport(machine, new MachineStatus(state.ToString()), at), ct);
+        if (ok) device.ReportedState = state;
+        return ok;
     }
 
     public ValueTask DisposeAsync()
@@ -118,7 +153,7 @@ internal readonly record struct Tick(double TemperatureC, double LineSpeedMetres
 /// <summary>One simulated production machine: a Running/Idle/Down state machine plus a cycle counter.</summary>
 internal sealed class SimulatedDevice(Guid machineId, string name)
 {
-    private const double IdealCycleSeconds = 12;
+    public const double IdealCycleSeconds = 12;
     private readonly record struct Sample(int Operating, double Run, int Total, int Good);
 
     private readonly Random _rng = new();
@@ -133,6 +168,7 @@ internal sealed class SimulatedDevice(Guid machineId, string name)
     private DateTime? _lastSentUtc;
 
     public Guid MachineId { get; } = machineId;
+    public SimState? ReportedState { get; set; }
 
     public Tick Tick()
     {

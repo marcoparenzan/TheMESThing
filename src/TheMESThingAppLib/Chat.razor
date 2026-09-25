@@ -1,0 +1,123 @@
+@page "/mes/chat"
+@rendermode InteractiveServer
+@using Markdig
+@using TheMESThingAPIClientLib.Proxies.Assistant
+@inject IAssistantService Assistant
+@inject IJSRuntime JS
+
+<PageTitle>Chiedi a Ralf?</PageTitle>
+
+<style>
+    .chat-log { display: flex; flex-direction: column; gap: .6rem; max-height: 60vh; overflow-y: auto; padding: .25rem; margin-bottom: 1rem; }
+    .chat-msg { max-width: 80%; padding: .6rem .85rem; border-radius: 10px; white-space: pre-wrap; line-height: 1.4; }
+    .chat-user { align-self: flex-end; background: #3b82f6; color: #fff; }
+    .chat-assistant { align-self: flex-start; background: #f1f5f9; color: #1e2a3a; white-space: normal; }
+    .chat-md > :first-child { margin-top: 0; }
+    .chat-md > :last-child { margin-bottom: 0; }
+    .chat-md p, .chat-md ul, .chat-md ol, .chat-md pre, .chat-md table { margin: .5rem 0; }
+    .chat-md ul, .chat-md ol { padding-left: 1.4rem; }
+    .chat-md code { background: #e2e8f0; padding: .05rem .3rem; border-radius: 4px; font-size: .85em; }
+    .chat-md pre { background: #1e2a3a; color: #e2e8f0; padding: .7rem .9rem; border-radius: 6px; overflow-x: auto; }
+    .chat-md pre code { background: none; padding: 0; color: inherit; }
+    .chat-md table { border-collapse: collapse; }
+    .chat-md th, .chat-md td { border: 1px solid #cbd5e1; padding: .3rem .6rem; text-align: left; }
+    .chat-md th { background: #e2e8f0; }
+    .chat-md a { color: #1d4ed8; }
+    .chat-tools { font-size: .72rem; color: #64748b; margin-top: .3rem; }
+    .chat-input { display: flex; gap: .5rem; }
+    .chat-input input { flex: 1; }
+    .chat-suggestions { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+</style>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">💬 Chiedi a Ralf?</h2>
+        <button class="btn btn-sm btn-secondary" @onclick="Clear" disabled="@(_messages.Count == 0 || _busy)">Clear</button>
+    </div>
+
+    @if (_messages.Count == 0)
+    {
+        <p style="font-size:.85rem;color:#64748b">Ask Ralf about machines, telemetry and OEE. Ralf reads live data through the API and computes OEE with the Python plugin.</p>
+        <div class="chat-suggestions">
+            @foreach (var s in _suggestions)
+            {
+                <button class="btn btn-sm btn-secondary" @onclick="() => Send(s)" disabled="@_busy">@s</button>
+            }
+        </div>
+    }
+
+    <div class="chat-log" id="chat-log">
+        @foreach (var m in _messages)
+        {
+            <div class="chat-msg @(m.IsUser ? "chat-user" : "chat-assistant")">
+                @if (m.IsUser) { @m.Text }
+                else { <div class="chat-md">@ToHtml(m.Text)</div> }
+                @if (m.Tools is { Count: > 0 }) { <div class="chat-tools">🔧 @string.Join(", ", m.Tools)</div> }
+            </div>
+        }
+        @if (_busy) { <div class="chat-msg chat-assistant loading">Thinking…</div> }
+    </div>
+    @if (_error != null) { <div class="alert alert-danger">@_error</div> }
+
+    <div class="chat-input">
+        <input type="text" @bind="_input" @bind:event="oninput" @onkeydown="OnKeyDown" placeholder="Type a question and press Enter" disabled="@_busy" />
+        <button class="btn btn-primary" @onclick="() => Send(_input)" disabled="@(_busy || string.IsNullOrWhiteSpace(_input))">Send</button>
+    </div>
+</div>
+
+@code {
+    sealed record Message(bool IsUser, string Text, IReadOnlyList<string>? Tools = null);
+
+    static readonly string[] _suggestions =
+    [
+        "Which machines do we have and what is their status?",
+        "What are the latest readings of the first machine?",
+        "Compute the OEE: planned 28800 s, operating 25200 s, run 23000 s, 950 good out of 1000.",
+    ];
+
+    readonly List<Message> _messages = [];
+    string _input = "";
+    string? _error;
+    bool _busy;
+
+    async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !_busy && !string.IsNullOrWhiteSpace(_input))
+            await Send(_input);
+    }
+
+    async Task Send(string text)
+    {
+        text = text.Trim();
+        if (text.Length == 0 || _busy) return;
+
+        var history = _messages.Select(m => new ChatTurn(m.IsUser ? "user" : "assistant", m.Text)).ToList();
+        _messages.Add(new Message(true, text));
+        _input = "";
+        _error = null;
+        _busy = true;
+        StateHasChanged();
+        await ScrollToEnd();
+
+        try
+        {
+            var (answer, error) = await Assistant.AskAsync(text, history);
+            if (answer is not null) _messages.Add(new Message(false, answer.Answer, answer.ToolsCalled.Distinct().ToList()));
+            else _error = error;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+
+        await ScrollToEnd();
+    }
+
+    // Raw HTML in the model output is disabled: it is rendered as text, never injected into the page.
+    static readonly MarkdownPipeline _markdown = new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+
+    static MarkupString ToHtml(string markdown) => new(Markdown.ToHtml(markdown, _markdown));
+
+    void Clear() { _messages.Clear(); _error = null; }
+
+    ValueTask ScrollToEnd() =>
+        JS.InvokeVoidAsync("eval", "var l=document.getElementById('chat-log'); if(l) l.scrollTop=l.scrollHeight;");
+}

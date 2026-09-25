@@ -7,6 +7,7 @@ using TheMESThingAppLib;
 using TheItemsThingLib;
 using TheMESItemsThingLib.Services;
 using TheMESThingAPIClientLib.Proxies.Analytics;
+using TheMESThingAPIClientLib.Proxies.Assistant;
 using TheMESThingAPIClientLib.Proxies.Iot;
 using TheMESThingAPIClientLib.Proxies.M365;
 using TheMESThingAPIClientLib.Proxies.Mes;
@@ -72,6 +73,7 @@ AddProxy<ITelemetryReadingsService, TelemetryReadingsProxy>();
 
 // Analytics proxies (OEE is computed by the API's Python plugin)
 AddProxy<IOeeCalculator, OeeCalculatorProxy>();
+AddProxy<IAssistantService, AssistantProxy>();
 
 // IoT device simulator hosted in this app; devices keep running independently of open pages
 builder.Services.AddSingleton<TheMESThingAppLib.Simulation.DeviceSimulator>();

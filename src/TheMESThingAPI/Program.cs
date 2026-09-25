@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
+using RalfAI.Providers;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
@@ -46,6 +48,24 @@ if (m365Config is not null)
     builder.Services.AddSingleton<ICalendarService, M365CalendarService>();
     builder.Services.AddSingleton<IContactsService, M365ContactsService>();
     builder.Services.AddSingleton<IDriveService, M365DriveService>();
+}
+
+// AI assistant (RalfAI.Providers). The AI settings are shared with RalfAI: its config.json is used when it
+// exists (path: RalfAI:ConfigPath, else RALFAI_CONFIG_PATH, else D:\Configurations\RalfAI\config.json),
+// otherwise the API's own configuration. The assistant is enabled only when an AIProvider is configured.
+var ralfConfigPath = builder.Configuration["RalfAI:ConfigPath"]
+    ?? Environment.GetEnvironmentVariable("RALFAI_CONFIG_PATH")
+    ?? @"D:\Configurations\RalfAI\config.json";
+IConfiguration aiConfig = File.Exists(ralfConfigPath)
+    ? new ConfigurationBuilder().AddJsonFile(ralfConfigPath, optional: false).AddEnvironmentVariables("RALFAI_").Build()
+    : builder.Configuration;
+
+string? assistantModel = null;
+if (!string.IsNullOrWhiteSpace(aiConfig["AIProvider"]))
+{
+    var (chatClient, modelId) = ChatClientFactory.Create(aiConfig);
+    assistantModel = modelId;
+    builder.Services.AddSingleton<IChatClient>(new ChatClientBuilder(chatClient).UseFunctionInvocation().Build());
 }
 
 builder.Services.AddSingleton(new PythonPluginHost(Path.Combine(AppContext.BaseDirectory, "plugins")));
@@ -124,6 +144,8 @@ app.MapMesEndpoints();
 app.MapIotEndpoints();
 app.MapTypedTelemetryEndpoints();
 app.MapPluginEndpoints();
+if (assistantModel is not null)
+    app.MapAssistantEndpoints(assistantModel);
 app.MapAnalyticsEndpoints();
 if (m365Config is not null)
     app.MapM365Endpoints();
