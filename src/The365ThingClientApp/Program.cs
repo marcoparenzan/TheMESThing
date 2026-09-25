@@ -7,7 +7,7 @@ using The365ThingLib;
 using TheItemsThingLib;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile(@"D:\configuration\TheMESThing\The365ThingClientApp\appsettings.json");
+builder.Configuration.AddJsonFile(@"D:\configurations\TheMESThing\The365ThingClientApp\appsettings.json");
 
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));

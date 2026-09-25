@@ -6,13 +6,14 @@ using TheMESThingApp;
 using TheMESThingAppLib;
 using TheItemsThingLib;
 using TheMESItemsThingLib.Services;
+using TheMESThingAPIClientLib.Proxies.Iot;
 using TheMESThingAPIClientLib.Proxies.M365;
 using TheMESThingAPIClientLib.Proxies.Mes;
 using TheMESThingAPIClientLib.Services;
 using TheMESThingApp.Components;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile(@"D:\configuration\TheMESThing\TheMESThingApp\appsettings.json");
+builder.Configuration.AddJsonFile(@"D:\configurations\TheMESThing\TheMESThingApp\appsettings.json");
 
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
@@ -64,6 +65,9 @@ AddProxy<IShiftService, ShiftServiceProxy>();
 AddProxy<IProductService, ProductServiceProxy>();
 AddProxy<IWorkOrderService, WorkOrderServiceProxy>();
 AddProxy<IProductionOrderService, ProductionOrderServiceProxy>();
+
+// IoT proxies
+AddProxy<ITelemetryReadingsService, TelemetryReadingsProxy>();
 
 var app = builder.Build();
 

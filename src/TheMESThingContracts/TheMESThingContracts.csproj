@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Roslyn source generator: compiles Contracts/*.yaml into C# on every build.
+         PrivateAssets="all" keeps it out of the dependency graph of projects referencing this one. -->
+    <PackageReference Include="Ontly.Generators" Version="0.1.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- telemetry.contract.yaml is the compilation root; measures.yaml is an include.
+         Both are listed so that editing either triggers regeneration. -->
+    <AdditionalFiles Include="Contracts\telemetry.contract.yaml" />
+    <AdditionalFiles Include="Contracts\measures.yaml" />
+  </ItemGroup>
+
+</Project>

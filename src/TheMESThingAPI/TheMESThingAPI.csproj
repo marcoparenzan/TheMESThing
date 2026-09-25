@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\The365ThingAppLib\The365ThingAppLib.csproj" />
     <ProjectReference Include="..\TheMESItemsThingLib\TheMESItemsThingLib.csproj" />
+    <ProjectReference Include="..\TheMESThingContracts\TheMESThingContracts.csproj" />
     <ProjectReference Include="..\TheMESThingData\TheMESThingData.csproj" />
     <ProjectReference Include="..\TheMESThingLib\TheMESThingLib.csproj" />
   </ItemGroup>

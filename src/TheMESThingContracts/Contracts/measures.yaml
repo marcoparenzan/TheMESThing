@@ -1,0 +1,19 @@
+dimensions:
+  Temperature: { temperature: 1 }
+  Time: { time: 1 }
+  Speed: { length: 1, time: -1 }
+  Acceleration: { length: 1, time: -2 }
+
+units:
+  Kelvin: { symbol: K, dimension: Temperature, scale: 1 }
+  Celsius: { symbol: °C, dimension: Temperature, scale: 1, offset: 273.15 }
+  Second: { symbol: s, dimension: Time, scale: 1 }
+  Minute: { symbol: min, dimension: Time, scale: 60 }
+  MetrePerMinute: { symbol: m/min, dimension: Speed, scale: 1 }
+  MetrePerSecondSquared: { symbol: m/s², dimension: Acceleration, scale: 1 }
+
+quantities:
+  TemperatureMeasure: { dimension: Temperature, canonicalUnit: Kelvin, units: [Celsius] }
+  CycleTimeMeasure: { dimension: Time, canonicalUnit: Second, units: [Minute] }
+  LineSpeedMeasure: { dimension: Speed, canonicalUnit: MetrePerMinute }
+  VibrationMeasure: { dimension: Acceleration, canonicalUnit: MetrePerSecondSquared }

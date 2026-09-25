@@ -9,6 +9,7 @@
     <Project Path="TheMESItemsThingLib/TheMESItemsThingLib.csproj" Id="9af40602-e07d-4d67-8156-108beba95d15" />
     <Project Path="TheMESThingAPI/TheMESThingAPI.csproj" />
     <Project Path="TheMESThingData/TheMESThingData.csproj" />
+    <Project Path="TheMESThingContracts/TheMESThingContracts.csproj" />
     <Project Path="TheMESThingLib/TheMESThingLib.csproj" Id="0af28692-e502-4a14-be7e-630f7b4db8db" />
   </Folder>
   <Folder Name="/3. MES/">

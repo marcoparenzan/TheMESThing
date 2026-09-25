@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TheItemsThingLib\TheItemsThingLib.csproj" />
     <ProjectReference Include="..\TheMESItemsThingLib\TheMESItemsThingLib.csproj" />
+    <ProjectReference Include="..\TheMESThingContracts\TheMESThingContracts.csproj" />
     <ProjectReference Include="..\TheMESThingData\TheMESThingData.csproj" />
   </ItemGroup>
 

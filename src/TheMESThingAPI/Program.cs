@@ -1,15 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
 using The365ThingLib;
 using TheItemsThingLib;
+using TheMESThing.Contracts.Json;
 using TheMESThingAPI.Endpoints;
 using TheMESThingData;
 using TheMESItemsThingLib.Services;
 using TheMESThingLib.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile(@"D:\configuration\TheMESThing\TheMESThingAPI\appsettings.json");
+builder.Configuration.AddJsonFile(@"D:\configurations\TheMESThing\TheMESThingAPI\appsettings.json");
 
 builder.Services.AddDbContext<TheMESThingDbContext>(options =>
 {
@@ -49,6 +51,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     options.SerializerOptions.MaxDepth = 128;
+    options.SerializerOptions.Converters.Add(new ScalarJsonConverterFactory());
+    options.SerializerOptions.Converters.Add(new QuantityJsonConverterFactory());
 });
 
 builder.Services.AddOpenApi(options =>
@@ -58,6 +62,22 @@ builder.Services.AddOpenApi(options =>
         doc.Info.Title = "TheMESThing API";
         doc.Info.Version = "v1";
         doc.Info.Description = "MES + IoT platform REST API";
+
+        doc.Components ??= new OpenApiComponents();
+        doc.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        doc.Components.SecuritySchemes["ApiKey"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.ApiKey,
+            Name = "X-Api-Key",
+            In = ParameterLocation.Header
+        };
+        doc.Security =
+        [
+            new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("ApiKey", doc)] = []
+            }
+        ];
         return Task.CompletedTask;
     });
 });
@@ -71,6 +91,7 @@ if (app.Environment.IsDevelopment())
     {
         options.Title = "TheMESThing API";
         options.Theme = ScalarTheme.BluePlanet;
+        options.AddPreferredSecuritySchemes("ApiKey");
         options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });
 }
@@ -79,6 +100,12 @@ app.UseHttpsRedirection();
 
 app.Use(async (ctx, next) =>
 {
+    if (ctx.Request.Path.StartsWithSegments("/scalar") || ctx.Request.Path.StartsWithSegments("/openapi"))
+    {
+        await next();
+        return;
+    }
+
     var expectedKey = ctx.RequestServices.GetRequiredService<IConfiguration>()["ApiKey"];
     if (!ctx.Request.Headers.TryGetValue("X-Api-Key", out var key) || key != expectedKey)
     {
@@ -90,6 +117,7 @@ app.Use(async (ctx, next) =>
 
 app.MapMesEndpoints();
 app.MapIotEndpoints();
+app.MapTypedTelemetryEndpoints();
 app.MapAnalyticsEndpoints();
 if (m365Config is not null)
     app.MapM365Endpoints();
